@@ -8,12 +8,13 @@ import Tooltip from 'primevue/tooltip'
 import App from './App.vue'
 import router from './router'
 import { definePreset } from '@primeuix/themes'
+import VueKonva from 'vue-konva'
 
 const app = createApp(App)
 
 app.use(createPinia())
 app.use(router)
-
+app.use(VueKonva)
 app.directive('tooltip', Tooltip)
 
 const customTheme = definePreset(Aura, {

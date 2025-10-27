@@ -14,7 +14,7 @@
       <router-link to="/routes">
         <div class="menuitem" :class="route.path === '/routes' ? 'active' : ''">
           <img src="@/assets/images/path.svg" alt="Logo" height="19px" width="20px" class="icon" />
-          <div class="title">Routes</div>
+          <div class="title hidden min-[320px]:block">Routes</div>
         </div>
       </router-link>
       <router-link to="/edit">
@@ -22,20 +22,11 @@
           <div class="icon">
             <div class="pi pi-file-edit" color="007bffff" size="29px"></div>
           </div>
-          <div class="title">Edit</div>
+          <div class="title hidden min-[320px]:block">Edit</div>
         </div>
       </router-link>
       <router-link to="/session">
         <div class="menuitem relative" :class="route.path === '/session' ? 'active' : ''">
-          <!-- <div
-            class="absolute bg-white rounded-full w-[40px] h-[40px] -z-1"
-            :class="route.path === '/climb' ? 'active' : ''"
-            style="
-              box-shadow:
-                rgba(0, 0, 0, 0.16) 0px 10px 36px 0px,
-                rgba(0, 0, 0, 0.06) 0px 0px 0px 1px;
-            "
-          ></div> -->
           <img
             src="@/assets/images/climber.svg"
             alt="Logo"
@@ -43,7 +34,7 @@
             width="20px"
             class="mt-[-4px] icon"
           />
-          <div class="title">Climb</div>
+          <div class="title hidden min-[320px]:block">Climb</div>
         </div>
       </router-link>
       <router-link to="/live">
@@ -55,7 +46,7 @@
             height="20px"
             width="20px"
           />
-          <div class="title">Live</div>
+          <div class="title hidden min-[320px]:block sm:text-xs">Live</div>
         </div>
       </router-link>
       <router-link to="/settings">
@@ -63,7 +54,7 @@
           <div class="icon">
             <span class="pi pi-cog"></span>
           </div>
-          <div class="title">Settings</div>
+          <div class="title hidden min-[320px]:block">Settings</div>
         </div>
       </router-link>
     </div>

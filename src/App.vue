@@ -15,13 +15,11 @@ import SideMenu from './components/navigation/SideMenu.vue'
     >
       <SideMenu></SideMenu>
     </div>
-    <div class="w-full bg-red overflow-scroll mb-[-20px]">
-      <router-view v-slot="{ Component }">
-        <transition name="fade" mode="out-in">
-          <component :is="Component" />
-        </transition>
-      </router-view>
-    </div>
+    <router-view v-slot="{ Component }">
+      <transition name="fade" mode="out-in">
+        <component :is="Component" />
+      </transition>
+    </router-view>
     <BottomMenu></BottomMenu>
   </div>
 </template>

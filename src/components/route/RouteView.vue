@@ -49,7 +49,7 @@ function preview(id: string) {
         style="box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px"
       >
         <div
-          class="relative bg-cover bg-center m-[4px] rounded-[12px]"
+          class="relative bg-cover bg-center m-[4px] rounded-[12px] pt-12"
           :style="{ backgroundImage: `url(${plywood})` }"
         >
           <!-- <div class="e absolute w-full h-full flex items-center justify-center pb-4">
@@ -67,7 +67,7 @@ function preview(id: string) {
         </div>
         <div class="absolute bottom-3 left-0 px-4 flex gap-2 justify-end w-full rounded-full">
           <button
-            class="mr-auto flex justify-center items-center border bg-primary border-primary text-white h-[40px] w-[40px] rounded-full mt-[-10px] p-2"
+            class="mr-auto flex justify-center items-center bg-[#ED6A5A] text-white h-[40px] w-[40px] rounded-full mt-[-10px] p-2"
             style="
               box-shadow:
                 rgba(50, 50, 93, 0.25) 0px 13px 27px -5px,
