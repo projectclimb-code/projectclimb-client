@@ -34,19 +34,22 @@ const mainLayer = ref(null)
 let observer
 
 onMounted(() => {
-  // configKonva.value.width = innerbox.value.clientWidth
-  // configKonva.value.height = innerbox.value.clientHeight
-  // ratio.value = box.value.clientWidth / box.value.clientHeight
-  // isWide.value = ratio.value > 0.78
-  // observer = new ResizeObserver(([entry]) => {
-  //   const { width, height } = entry.contentRect
-  //   configKonva.value.width = innerbox.value.clientWidth
-  //   configKonva.value.height = innerbox.value.clientHeight
-  //   ratio.value = width / height
-  //   isWide.value = ratio.value > 0.78
-  //   scaleLayer(mainLayer.value, stage.value)
-  // })
-  // observer.observe(box.value)
+  mainLayer.value = new Konva.Layer()
+  configKonva.value.width = innerbox.value.clientWidth
+  configKonva.value.height = innerbox.value.clientHeight
+  ratio.value = box.value.clientWidth / box.value.clientHeight
+  isWide.value = ratio.value > 0.78
+  scaleLayer(mainLayer.value, stage.value)
+
+  observer = new ResizeObserver(([entry]) => {
+    const { width, height } = entry.contentRect
+    configKonva.value.width = innerbox.value.clientWidth
+    configKonva.value.height = innerbox.value.clientHeight
+    ratio.value = width / height
+    isWide.value = ratio.value > 0.78
+    scaleLayer(mainLayer.value, stage.value)
+  })
+  observer.observe(box.value)
   initKonva()
 })
 
@@ -56,31 +59,11 @@ onBeforeUnmount(() => {
 
 async function initKonva() {
   const konvaStage = stage.value.getNode()
-  const layer = new Konva.Layer()
-  mainLayer.value = layer
-  konvaStage.add(layer)
 
   const holdsLayer = loadWallSvg()
-  //   // konvaStage.add(holdsLayer)
-
-  //   const imageObj = new Image()
-  //   imageObj.src = 'wall.png' // replace with your image path
-  // <>>>
-  // imageObj.onload = function () {
-  //   // 3️⃣ Create Konva.Image
-  //   const konvaImage = new Konva.Image({
-  //     x: 0,
-  //     y: 0,
-  //     image: imageObj,
-  //   })
-  //   konvaImage.scale({
-  //     x: konvaStage.height() / konvaStage.height(),
-  //     y: konvaStage.width() / konvaStage.width(),
-  //   })
-
-  //   layer.add(konvaImage)
-  //   konvaImage.moveToBottom()
-  //   konvaStage.draw()
-  // }
+  const layer = new Konva.Layer()
+  layer.add(holdsLayer)
+  konvaStage.add(layer)
+  konvaStage.draw()
 }
 </script>

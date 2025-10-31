@@ -10,6 +10,7 @@ declare module 'vue' {
   export interface GlobalComponents {
     BottomMenu: typeof import('./src/components/navigation/BottomMenu.vue')['default']
     Button: typeof import('primevue/button')['default']
+    Dialog: typeof import('primevue/dialog')['default']
     DifficultyTag: typeof import('./src/components/route/DifficultyTag.vue')['default']
     RouteEdit: typeof import('./src/components/route/RouteEdit.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']

@@ -10,7 +10,15 @@ const isWide = ref(false)
 const ratio = ref(1)
 const visible = ref(false)
 const router = useRouter()
+const routesStore = useRoutesStore()
+
 let observer
+import type { Route } from '@/types/route'
+import { useRoutesStore } from '@/stores/routes'
+
+const props = defineProps<{
+  route: Route
+}>()
 
 onMounted(() => {
   observer = new ResizeObserver(([entry]) => {
@@ -32,6 +40,12 @@ function editRoute(path: string) {
 function preview(id: string) {
   console.log('Preview route', id)
 }
+
+function deleteRoute() {
+  routesStore.deleteRoute(props.route.id)
+  visible.value = false
+}
+
 </script>
 <template>
   <div ref="box" class="flex items-center justify-center relative">
@@ -61,9 +75,9 @@ function preview(id: string) {
           <div
             class="text-sm bg-white text-primary rounded-md whitespace-nowrap size-fit p-1 px-2 max-w-[80%] truncate"
           >
-            Rokki crimpe asfd asdf asdf
+            {{ props.route.name }}
           </div>
-          <DifficultyTag :difficulty="'7c'"></DifficultyTag>
+          <DifficultyTag :grade="props.route.data.grade"></DifficultyTag>
         </div>
         <div class="absolute bottom-3 left-0 px-4 flex gap-2 justify-end w-full rounded-full">
           <button
@@ -147,7 +161,7 @@ function preview(id: string) {
               <Button type="button" label="Cancel" severity="secondary" @click="visible = false">
                 Cancel
               </Button>
-              <Button type="button" label="Delete" @click="visible = false">Delete</Button>
+              <Button type="button" label="Delete" @click="deleteRoute()">Delete</Button>
             </div>
           </Dialog>
         </div>

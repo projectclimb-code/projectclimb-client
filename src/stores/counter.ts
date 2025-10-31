@@ -7,6 +7,10 @@ export const useCounterStore = defineStore('counter', () => {
   function increment() {
     count.value++
   }
-
+  fetch('/api/counter/init')
+    .then((response) => response.json())
+    .then((data) => {
+      count.value = data.initialCount
+    })
   return { count, doubleCount, increment }
 })

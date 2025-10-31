@@ -1,11 +1,14 @@
 import { constants } from '@/utils/constants.ts'
 
 export async function loadWallSvg() {
+
   const response = await fetch('wall.svg')
+  console.log('Found paths:')
   const svgText = await response.text()
+
   // 3️⃣ Parse SVG text into DOM
   const parser = new DOMParser()
-  const holdsLayer = new Konva.Layer()
+  const holdsLayer = new Konva.Group()
   const svgDoc = parser.parseFromString(svgText, 'image/svg+xml')
 
   // 4️⃣ Find all <path> elements
@@ -13,6 +16,7 @@ export async function loadWallSvg() {
   console.log('Found paths:', paths.length)
 
   paths.forEach((p, i) => {
+
     // Get basic attributes
     const d = p.getAttribute('d')
     const fill = p.getAttribute('fill') || 'white'
@@ -29,18 +33,18 @@ export async function loadWallSvg() {
       opacity: 0.3,
     })
 
-    konvaPath.on('click', (e) => {
-      console.log('Path clicked:', konvaPath.id())
+    // konvaPath.on('click', (e) => {
+    //   console.log('Path clicked:', konvaPath.id())
 
-      // Example: change color on click
-      if (konvaPath.opacity() < 1) {
-        konvaPath.opacity(1)
-      } else {
-        konvaPath.opacity(0.3)
-      }
+    //   // Example: change color on click
+    //   if (konvaPath.opacity() < 1) {
+    //     konvaPath.opacity(1)
+    //   } else {
+    //     konvaPath.opacity(0.3)
+    //   }
 
-      konvaPath.getLayer().batchDraw()
-    })
+    //   konvaPath.getLayer().batchDraw()
+    // })
 
     // 1️⃣ Get current absolute position
     // const absPos = konvaPath.getAbsolutePosition()
@@ -65,6 +69,7 @@ export async function loadWallSvg() {
     konvaPath.y(konvaPath.y() + offsetShiftY)
     holdsLayer.add(konvaPath)
   })
+  console.log('holdsLayer', holdsLayer)
   return holdsLayer
 }
 
