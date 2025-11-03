@@ -1,6 +1,11 @@
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import BottomMenu from './components/navigation/BottomMenu.vue'
 import SideMenu from './components/navigation/SideMenu.vue'
+
+onMounted(() => {
+  document.title = 'ProjectClimb'
+})
 </script>
 
 <template>

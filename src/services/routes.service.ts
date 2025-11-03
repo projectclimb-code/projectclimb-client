@@ -1,6 +1,6 @@
 import type { Route } from '@/interfaces/interfaces.ts'
 
-const API_BASE_URL = 'https://climber.dev.maptnh.net/api/routes/'
+const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL || ''}routes/`
 
 const headers = {
   accept: 'application/json',
@@ -24,21 +24,19 @@ export async function routesCreate() {
   const data = {
     slug: '',
     deleted: false,
-    name: 'sdfasd',
+    name: 'Warm Up Eagle',
     data: {
       grade: '6a',
       author: 'Trinity',
       problem: {
         holds: [
-          { id: '17', type: 'start', next: 6, hand: 'l' },
-          { id: '91', type: 'start', next: 101, hand: 'r' },
-          { id: '6', type: 'normal', next: 55, hand: 'r' },
-          { id: '101', type: 'normal', next: 133, hand: 'l' },
-          { id: '55', type: 'normal', next: 11, hand: 'r' },
-          { id: '133', type: 'normal', next: 89, hand: 'r' },
-          { id: '89', type: 'normal', next: 72, hand: 'r' },
-          { id: '41', type: 'normal', next: 101, hand: 'r' },
-          { id: '72', type: 'finish', next: null, hand: 'r' },
+          { id: '130', type: 'start', next: 6, hand: 'l' },
+          { id: '42', type: 'start', next: 6, hand: 'l' },
+          { id: '113', type: 'normal', next: 101, hand: 'r' },
+          { id: '41', type: 'normal', next: 55, hand: 'r' },
+          { id: '127', type: 'normal', next: 133, hand: 'l' },
+          { id: '124', type: 'normal', next: 11, hand: 'r' },
+          { id: '106', type: 'finish', next: null, hand: 'r' },
         ],
       },
     },

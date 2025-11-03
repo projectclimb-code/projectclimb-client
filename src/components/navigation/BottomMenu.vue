@@ -14,7 +14,7 @@
       <router-link to="/routes">
         <div class="menuitem" :class="route.path === '/routes' ? 'active' : ''">
           <img src="@/assets/images/path.svg" alt="Logo" height="19px" width="20px" class="icon" />
-          <div class="title hidden min-[320px]:block">Routes</div>
+          <div class="title hidden min-[320px]:block">Boulders</div>
         </div>
       </router-link>
       <router-link to="/edit">

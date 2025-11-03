@@ -9,6 +9,7 @@ import App from './App.vue'
 import router from './router'
 import { definePreset } from '@primeuix/themes'
 import VueKonva from 'vue-konva'
+import { websocketService } from './services/ws.service'
 
 const app = createApp(App)
 
@@ -16,6 +17,8 @@ app.use(createPinia())
 app.use(router)
 app.use(VueKonva)
 app.directive('tooltip', Tooltip)
+
+websocketService.connect(`${import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8000/ws/pose/'}`  )
 
 const customTheme = definePreset(Aura, {
   semantic: {

@@ -5,19 +5,27 @@
   >
     <div
       ref="innerbox"
-      class="bg-cover bg-center aspect-[0.78] flex items-center justify-center overflow-hidden bg-amber-600"
+      class="relative bg-cover bg-center aspect-[0.78] flex items-center justify-center overflow-hidden bg-amber-600"
       :class="{
         'h-full max-w-full': isWide,
         'w-full max-h-full': !isWide,
       }"
     >
       <v-stage ref="stage" :config="configKonva"></v-stage>
+      <div class="absolute top-0 left-0 flex flex-col gap-2">
+        <Button label="Save" />
+        <Button label="Cancel" />
+        <Button label="Edit info" />
+        <Button label="Start" />
+        <Button label="End" />
+        <Button label="Flip" />
+      </div>
     </div>
   </div>
 </template>
 <script lang="ts" setup>
 import { loadWallSvg, scaleLayer } from '@/wall/wall'
-import Konva from 'konva'
+import Button from 'primevue/button'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 const box = ref(null)
 const innerbox = ref(null)
@@ -33,24 +41,26 @@ const mainLayer = ref(null)
 
 let observer
 
-onMounted(() => {
-  mainLayer.value = new Konva.Layer()
+function isWideScreen(width?: number, height?: number) {
   configKonva.value.width = innerbox.value.clientWidth
   configKonva.value.height = innerbox.value.clientHeight
-  ratio.value = box.value.clientWidth / box.value.clientHeight
+  ratio.value = width / height || innerbox.value.clientWidth / innerbox.value.clientHeight
   isWide.value = ratio.value > 0.78
-  scaleLayer(mainLayer.value, stage.value)
+}
+
+onMounted(() => {
+  const konvaStage = stage.value.getNode()
+  initKonva()
+  isWideScreen()
 
   observer = new ResizeObserver(([entry]) => {
     const { width, height } = entry.contentRect
-    configKonva.value.width = innerbox.value.clientWidth
-    configKonva.value.height = innerbox.value.clientHeight
-    ratio.value = width / height
-    isWide.value = ratio.value > 0.78
-    scaleLayer(mainLayer.value, stage.value)
+    isWideScreen(width, height)
+    if (konvaStage && mainLayer.value) {
+      scaleLayer(mainLayer.value, konvaStage)
+    }
   })
   observer.observe(box.value)
-  initKonva()
 })
 
 onBeforeUnmount(() => {
@@ -59,11 +69,9 @@ onBeforeUnmount(() => {
 
 async function initKonva() {
   const konvaStage = stage.value.getNode()
-
-  const holdsLayer = loadWallSvg()
-  const layer = new Konva.Layer()
-  layer.add(holdsLayer)
-  konvaStage.add(layer)
+  mainLayer.value = await loadWallSvg()
+  scaleLayer(mainLayer.value, konvaStage)
+  konvaStage.add(mainLayer.value)
   konvaStage.draw()
 }
 </script>
