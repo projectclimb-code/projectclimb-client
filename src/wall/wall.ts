@@ -1,6 +1,10 @@
 import { constants } from '@/utils/constants.ts'
 
-export async function loadWallSvg() {
+export async function loadWallSvg(
+  onPathClick?: (pathId: string) => void,
+  selectedStarts: string[] = [],
+  selectedEnd: string | null = null
+) {
   const response = await fetch('wall.svg')
   const svgText = await response.text()
 
@@ -19,38 +23,44 @@ export async function loadWallSvg() {
     const stroke = p.getAttribute('stroke') || 'black'
     const strokeWidth = parseFloat(p.getAttribute('stroke-width') || 13)
 
+    const pathId = `${i}`
+    const isStart = selectedStarts.includes(pathId)
+    const isEnd = selectedEnd === pathId
+
+    // Apply color based on selection
+    let pathFill = fill
+    let pathOpacity = 0.3
+
+    if (isStart) {
+      pathFill = 'green'
+      pathOpacity = 1
+    } else if (isEnd) {
+      pathFill = 'red'
+      pathOpacity = 1
+    }
+
     // 5️⃣ Create Konva.Path
     const konvaPath = new Konva.Path({
-      id: `${i}`,
+      id: pathId,
       data: d,
-      fill,
+      fill: pathFill,
       stroke,
       strokeWidth,
-      opacity: 0.3,
+      opacity: pathOpacity,
     })
 
     konvaPath.on('click', (e) => {
-      console.log('Path clicked:', konvaPath.id())
-
-      // Example: change color on click
-      if (konvaPath.opacity() < 1) {
-        konvaPath.opacity(1)
-      } else {
-        konvaPath.opacity(0.3)
+      if (onPathClick) {
+        onPathClick(pathId)
       }
-      konvaPath.getLayer().batchDraw()
     })
 
     konvaPath.on('tap', (e) => {
-      console.log('Path tapped:', konvaPath.id())
-      // Example: change color on tap
-      if (konvaPath.opacity() < 1) {
-        konvaPath.opacity(1)
-      } else {
-        konvaPath.opacity(0.3)
+      if (onPathClick) {
+        onPathClick(pathId)
       }
-      konvaPath.getLayer().batchDraw()
     })
+
     const box = konvaPath.getClientRect({ skipTransform: true })
     const centerX = box.x + box.width / 2
     const centerY = box.y + box.height / 2
