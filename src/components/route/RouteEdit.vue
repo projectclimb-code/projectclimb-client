@@ -12,29 +12,21 @@
       }"
     >
       <v-stage ref="stage" :config="configKonva"></v-stage>
-      <div class="absolute top-0 left-0 flex flex-col gap-2">
-        <Button label="Save" />
-        <Button label="Cancel" />
-        <Button label="Edit info" />
-        <Button 
-          label="Start" 
-          :class="{ 'opacity-50': startMode }"
-          @click="activateStartMode" 
-        />
-        <Button 
-          label="End" 
-          :class="{ 'opacity-50': endMode }"
-          @click="activateEndMode" 
-        />
-        <Button label="Flip" />
-      </div>
+      <SpeedDial 
+        :model="items" 
+        direction="up" 
+        class="speed-dial-large"
+        :buttonProps="{ style: { width: '4.2rem', height: '4.2rem', fontSize: '2.2rem', borderRadius: '50%' } }"
+        :actionButtonProps="{ style: { width: '3.2rem', height: '3.2rem', fontSize: '2.2rem', borderRadius: '50%', backgroundColor: 'white', color: 'black', border: 'none' } }"
+        style="position: absolute; left: 2%; bottom: 10%" 
+      />
     </div>
   </div>
 </template>
 <script lang="ts" setup>
 import { loadWallSvg, scaleLayer } from '@/wall/wall'
-import Button from 'primevue/button'
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import SpeedDial from 'primevue/speeddial'
+import { onBeforeUnmount, onMounted, ref, computed } from 'vue'
 const box = ref(null)
 const innerbox = ref(null)
 const isWide = ref(false)
@@ -52,6 +44,85 @@ const selectedStarts = ref<string[]>([])
 const selectedEnd = ref<string | null>(null)
 
 let observer
+
+function handleSave() {
+  // TODO: Implement save functionality
+  console.log('Save clicked')
+}
+
+function handleCancel() {
+  // TODO: Implement cancel functionality
+  console.log('Cancel clicked')
+}
+
+function handleEditInfo() {
+  // TODO: Implement edit info functionality
+  console.log('Edit info clicked')
+}
+
+function handleFlip() {
+  // TODO: Implement flip functionality
+  console.log('Flip clicked')
+}
+
+const items = computed(() => [
+  {
+    label: 'Flip',
+    icon: 'pi pi-refresh',
+    command: handleFlip,
+    tooltip: 'Flip',
+    tooltipOptions: {
+      position: 'left',
+    },
+  },
+  {
+    label: 'End',
+    icon: 'pi pi-stop-circle',
+    command: activateEndMode,
+    tooltip: 'End',
+    tooltipOptions: {
+      position: 'left',
+    },
+    class: endMode.value ? 'opacity-50' : '',
+  },
+  {
+    label: 'Start',
+    icon: 'pi pi-play',
+    command: activateStartMode,
+    tooltip: 'Start',
+    tooltipOptions: {
+      position: 'left',
+    },
+    class: startMode.value ? 'opacity-50' : '',
+  },
+  {
+    label: 'Edit info',
+    icon: 'pi pi-pencil',
+    command: handleEditInfo,
+    tooltip: 'Edit info',
+    tooltipOptions: {
+      position: 'left',
+    },
+  },
+  {
+    label: 'Cancel',
+    icon: 'pi pi-times',
+    command: handleCancel,
+    tooltip: 'Cancel',
+    tooltipOptions: {
+      position: 'left',
+    },
+  },
+  {
+    label: 'Save',
+    icon: 'pi pi-check',
+    command: handleSave,
+    tooltip: 'Save',
+    tooltipOptions: {
+      position: 'left',
+    },
+  },
+])
 
 function activateStartMode() {
   startMode.value = true
@@ -192,3 +263,45 @@ async function initKonva() {
   konvaStage.draw()
 }
 </script>
+
+<style scoped>
+:deep(.speed-dial-large .p-speeddial-button),
+:deep(.speed-dial-large .p-speeddial-button-icon) {
+  width: 4.2rem !important;
+  height: 4.2rem !important;
+  border-radius: 50% !important;
+  font-size: 2.2rem !important;
+}
+
+:deep(.speed-dial-large .p-speeddial-action),
+:deep(.speed-dial-large .p-speeddial-action-button),
+:deep(.speed-dial-large .p-speeddial-action-icon) {
+  width: 3.2rem !important;
+  height: 3.2rem !important;
+  border-radius: 50% !important;
+  font-size: 2.2rem !important;
+  min-width: 3.2rem !important;
+  min-height: 3.2rem !important;
+}
+
+:deep(.speed-dial-large .p-speeddial-action-button) {
+  border-radius: 50% !important;
+  background-color: white !important;
+  color: black !important;
+  border: none !important;
+  box-shadow: none !important;
+  transition: background-color 0.2s ease !important;
+}
+
+:deep(.speed-dial-large .p-speeddial-action-button:hover) {
+  background-color: #f0f0f0 !important;
+}
+
+:deep(.speed-dial-large .p-speeddial-action-icon) {
+  color: black !important;
+}
+
+:deep(.speed-dial-large .p-button) {
+  border-radius: 50% !important;
+}
+</style>
