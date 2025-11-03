@@ -22,8 +22,6 @@ export async function routesGet() {
 
 export async function routesCreate() {
   const data = {
-    slug: '',
-    deleted: false,
     name: 'Warm Up Eagle',
     data: {
       grade: '6a',

@@ -6,21 +6,29 @@ export interface Route {
   data: Data
 }
 
+
 export interface Data {
-  grade: string
+  grade: ClimbingRouteGrade
   author: string
   problem: Problem
 }
 
+// always 2 for start and 1 for finish
 export interface Problem {
   holds: Hold[]
 }
 
 export interface Hold {
   id: string
-  type: string
-  next?: number
-  hand: string
+  type: HoldType
+  // next?: number
+  // hand?: string
+}
+
+export enum HoldType {
+  'start' = 'start',
+  'normal' = 'normal',
+  'finish' = 'finish'
 }
 
 export enum ClimbingRouteGrade {

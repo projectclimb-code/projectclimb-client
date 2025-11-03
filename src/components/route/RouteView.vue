@@ -15,6 +15,7 @@ const routesStore = useRoutesStore()
 let observer
 import type { Route } from '@/types/route'
 import { useRoutesStore } from '@/stores/routes'
+import { websocketService } from '@/services/ws.service'
 
 const props = defineProps<{
   route: Route
@@ -38,6 +39,10 @@ function editRoute(path: string) {
 }
 
 function preview(id: string) {
+  websocketService.send({
+    type: 'preview',
+    route: props.route,
+  })
   console.log('Preview route', id)
 }
 
