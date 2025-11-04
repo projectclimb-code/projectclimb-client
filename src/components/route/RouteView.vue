@@ -144,7 +144,7 @@ function deleteRoute() {
           >
             <div class="-mt-[5px]">
               <span
-                class="pi pi-refresh text-primary inline-block"
+                class="pi pi-arrow-right-arrow-left text-primary inline-block"
                 style="font-size: 13px; font-weight: 100"
               ></span>
             </div>
