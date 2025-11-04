@@ -4,7 +4,7 @@ import { routesDelete, routesGet, routesCreate } from '@/services/routes.service
 import type { Route } from '@/interfaces/interfaces.ts'
 
 export const useRoutesStore = defineStore('routes', () => {
-  const routes = ref([])
+  const routes = ref<Route[]>([])
 
   async function getRoutes() {
     routes.value = await routesGet()

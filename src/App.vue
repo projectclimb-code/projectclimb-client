@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import BottomMenu from './components/navigation/BottomMenu.vue'
-import SideMenu from './components/navigation/SideMenu.vue'
+// import SideMenu from './components/navigation/SideMenu.vue'
 
 onMounted(() => {
   document.title = 'ProjectClimb'
@@ -9,24 +9,14 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="h-[100vh] w-[100vw] overflow-hidden grid grid-rows-[50px_1fr] gap-0">
-    <div
-      class="w-full h-[50px]"
-      style="
-        box-shadow:
-          rgba(0, 0, 0, 0.16) 0px 10px 36px 0px,
-          rgba(0, 0, 0, 0.06) 0px 0px 0px 1px;
-      "
-    >
-      <SideMenu></SideMenu>
-    </div>
+  <div class="h-[100vh] w-[100vw] overflow-hidden grid grid-rows-[1fr_auto] gap-0">
     <router-view v-slot="{ Component }">
       <transition name="fade" mode="out-in">
         <component :is="Component" />
       </transition>
     </router-view>
-    <BottomMenu></BottomMenu>
-  </div>
+    <BottomMenu />
+  </div>  
 </template>
 
 <style lang="scss">

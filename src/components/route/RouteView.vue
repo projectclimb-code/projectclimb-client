@@ -84,6 +84,7 @@ function deleteRoute() {
           <DifficultyTag :grade="props.route.data.grade"></DifficultyTag>
         </div>
         <div class="absolute bottom-3 left-0 px-4 flex gap-2 justify-end w-full rounded-full">
+          
           <button
             class="mr-auto flex justify-center items-center bg-[#ED6A5A] text-white h-[40px] w-[40px] rounded-full mt-[-10px] p-2"
             style="
@@ -116,7 +117,6 @@ function deleteRoute() {
               ></span>
             </div>
           </button>
-
           <button
             class="flex justify-center items-center border bg-white border-primary text-white h-[32px] w-[32px] p-2 rounded-full"
             style="
@@ -129,6 +129,22 @@ function deleteRoute() {
             <div class="-mt-[5px] ml-[2px]">
               <span
                 class="pi pi-file-edit text-primary inline-block"
+                style="font-size: 13px; font-weight: 100"
+              ></span>
+            </div>
+          </button>
+          <button
+            class="flex justify-center items-center border bg-white border-primary text-white h-[32px] w-[32px] p-2 rounded-full"
+            style="
+              box-shadow:
+                rgba(50, 50, 93, 0.25) 0px 13px 27px -5px,
+                rgba(0, 0, 0, 0.3) 0px 8px 16px -8px;
+            "
+            @click="preview('/edit')"
+          >
+            <div class="-mt-[5px]">
+              <span
+                class="pi pi-refresh text-primary inline-block"
                 style="font-size: 13px; font-weight: 100"
               ></span>
             </div>
