@@ -9,6 +9,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     BottomMenu: typeof import('./src/components/navigation/BottomMenu.vue')['default']
+    Button: typeof import('primevue/button')['default']
     Dialog: typeof import('primevue/dialog')['default']
     DifficultyTag: typeof import('./src/components/route/DifficultyTag.vue')['default']
     Dropdown: typeof import('primevue/dropdown')['default']
@@ -16,6 +17,7 @@ declare module 'vue' {
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     RouteView: typeof import('./src/components/route/RouteView.vue')['default']
+    Sidebar: typeof import('primevue/sidebar')['default']
     SideMenu: typeof import('./src/components/navigation/SideMenu.vue')['default']
   }
   export interface GlobalDirectives {
