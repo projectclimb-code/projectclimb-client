@@ -38,12 +38,11 @@ function editRoute(path: string) {
   router.push(path)
 }
 
-function preview(id: string) {
+function preview() {
   websocketService.send({
     type: 'preview',
     route: props.route,
   })
-  console.log('Preview route', id)
 }
 
 function deleteRoute() {
