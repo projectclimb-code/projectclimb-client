@@ -44,11 +44,17 @@
 <script lang="ts" setup>
 import { loadWallSvg, scaleLayer } from '@/wall/wall'
 import { onBeforeUnmount, onMounted, ref, computed, nextTick } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import plywood from '@/assets/images/plywood.jpg'
 import ActionButtons from './ActionButtons.vue'
+import { useRoutesStore } from '@/stores/routes'
+import type { Route, Hold } from '@/interfaces/interfaces.ts'
+import { HoldType } from '@/interfaces/interfaces.ts'
+import { websocketService } from '@/services/ws.service'
 
 const route = useRoute()
+const router = useRouter()
+const routesStore = useRoutesStore()
 const isSessionRoute = computed(() => route.path === '/session')
 
 const box = ref(null)
@@ -69,17 +75,50 @@ const endMode = ref(false)
 const selectedStarts = ref<string[]>([])
 const selectedEnd = ref<string | null>(null)
 const selectedNormalPositions = ref<Set<string>>(new Set())
+const currentRoute = ref<Route | null>(null)
 
 let observer: ResizeObserver | null = null
 
-function handleSave() {
-  // TODO: Implement save functionality
-  console.log('Save clicked')
+async function handleSave() {
+  if (!currentRoute.value || !currentRoute.value.id) {
+    console.error('No route to save')
+    return
+  }
+
+  const holds: Hold[] = []
+  
+  selectedStarts.value.forEach((id) => {
+    holds.push({ id, type: HoldType.start })
+  })
+  
+  Array.from(selectedNormalPositions.value).forEach((id) => {
+    holds.push({ id, type: HoldType.normal })
+  })
+  
+  if (selectedEnd.value) {
+    holds.push({ id: selectedEnd.value, type: HoldType.finish })
+  }
+
+  const updatedRoute: Route = {
+    ...currentRoute.value,
+    data: {
+      ...currentRoute.value.data,
+      problem: {
+        holds,
+      },
+    },
+  }
+
+  try {
+    await routesStore.saveRoute(updatedRoute)
+    router.push('/routes')
+  } catch (error) {
+    console.error('Failed to save route:', error)
+  }
 }
 
 function handleCancel() {
-  // TODO: Implement cancel functionality
-  console.log('Cancel clicked')
+  router.push('/routes')
 }
 
 function handleEditInfo() {
@@ -92,6 +131,14 @@ function handleFlip() {
   console.log('Flip clicked')
 }
 
+function preview() {
+  websocketService.send({
+    type: 'preview',
+    startHolds: [...selectedStarts.value],
+    finishHold: selectedEnd.value || null,
+    holds: Array.from(selectedNormalPositions.value),
+  })
+}
 
 function activateStartMode() {
   startMode.value = true
@@ -150,12 +197,34 @@ let handleResize: (() => void) | null = null
 onMounted(async () => {
   await nextTick()
   
+  const routeId = route.query.id ? Number(route.query.id) : null
+  if (routeId) {
+    await routesStore.getRoutes()
+    const routeToEdit = routesStore.routes.find((r) => r.id === routeId)
+    if (routeToEdit) {
+      currentRoute.value = routeToEdit
+      
+      if (routeToEdit.data?.problem?.holds) {
+        routeToEdit.data.problem.holds.forEach((hold) => {
+          if (hold.type === HoldType.start) {
+            selectedStarts.value.push(hold.id)
+          } else if (hold.type === HoldType.finish) {
+            selectedEnd.value = hold.id
+          } else if (hold.type === HoldType.normal) {
+            selectedNormalPositions.value.add(hold.id)
+          }
+        })
+      }
+    }
+  }
+  
   setTimeout(() => {
     const konvaStage = stage.value.getNode()
     initKonva()
     
     setTimeout(() => {
       isWideScreen()
+      updatePathColors()
     }, 50)
   }, 100)
   
@@ -197,6 +266,7 @@ function handlePathClick(pathId: string) {
   } else {
     handleNormalSelection(pathId)
   }
+  preview()
 }
 
 function handleStartSelection(pathId: string) {

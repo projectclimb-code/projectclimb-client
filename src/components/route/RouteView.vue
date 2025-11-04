@@ -35,7 +35,7 @@ onBeforeUnmount(() => {
 })
 
 function editRoute(path: string) {
-  router.push(path)
+  router.push({ path, query: { id: props.route.id } })
 }
 
 function preview() {
