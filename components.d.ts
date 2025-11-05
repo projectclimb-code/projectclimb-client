@@ -8,6 +8,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    ActionButtons: typeof import('./src/components/route/ActionButtons.vue')['default']
     BottomMenu: typeof import('./src/components/navigation/BottomMenu.vue')['default']
     Button: typeof import('primevue/button')['default']
     Dialog: typeof import('primevue/dialog')['default']
@@ -19,5 +20,8 @@ declare module 'vue' {
     RouteView: typeof import('./src/components/route/RouteView.vue')['default']
     Sidebar: typeof import('primevue/sidebar')['default']
     SideMenu: typeof import('./src/components/navigation/SideMenu.vue')['default']
+  }
+  export interface GlobalDirectives {
+    Tooltip: typeof import('primevue/tooltip')['default']
   }
 }

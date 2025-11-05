@@ -1,10 +1,10 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
-import { routesDelete, routesGet, routesCreate } from '@/services/routes.service'
+import { routesDelete, routesGet, routesCreate, routeUpdate } from '@/services/routes.service'
 import type { Route } from '@/interfaces/interfaces.ts'
 
 export const useRoutesStore = defineStore('routes', () => {
-  const routes = ref([])
+  const routes = ref<Route[]>([])
 
   async function getRoutes() {
     routes.value = await routesGet()
@@ -23,7 +23,7 @@ export const useRoutesStore = defineStore('routes', () => {
   }
 
   async function saveRoute(route: Route) {
-    await routesUpdate(route)
+    await routeUpdate(route)
     routes.value = routes.value.map((r) => (r.id === route.id ? route : r))
     return route
   }
