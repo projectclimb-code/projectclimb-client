@@ -15,13 +15,11 @@ async function createRoute() {
 </script>
 <template>
   <div class="relative h-full overflow-x-hidden overflow-y-auto">
-    <div
-      class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 p-6 pb-[120px] auto-rows-fr"
-    >
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 p-6 pb-[120px]">
       <RouteView 
         v-for="route in routesStore.routes" 
         :key="route.id" 
-        class="w-full h-full min-h-0" 
+        class="w-full" 
         :route="route"
       ></RouteView>
     </div>
@@ -39,4 +37,3 @@ async function createRoute() {
     </div>
   </div>
 </template>
-

@@ -1,14 +1,13 @@
 <template>
   <div
     ref="box"
-    class="flex relative touch-none items-center justify-center w-full"
+    class="flex relative touch-none items-center justify-center w-full route-edit-container"
     :class="{
-      'h-[calc(100vh-150px)]': isMobile,
-      'h-[calc(100%-100px)] overflow-hidden': !isMobile,
+      'h-full': true,
       'pt-[80px]': isTablet,
       'session-route': isSessionRoute
     }"
-    style="min-height: 0; position: relative;"
+    style="min-height: 0; position: relative; pointer-events: auto; overflow: hidden;"
   >
     <ActionButtons
       :is-mobile="isMobile"
@@ -30,13 +29,29 @@
         'canvas-container': true,
         'tablet-canvas': isTablet,
       }"
-      :style="{ backgroundImage: `url(${plywood})`, zIndex: 1 }"
+      :style="{ backgroundImage: `url(${plywood})`, zIndex: 1, pointerEvents: 'auto' }"
     >
       <v-stage
         ref="stage"
         :config="configKonva"
         class="touch-none canvas-stage"
       ></v-stage>
+    </div>
+    
+    <!-- Route name and grade display -->
+    <div
+      v-if="currentRoute && !isSessionRoute"
+      class="route-info-bar"
+      :class="{
+        'route-info-mobile': isMobile,
+        'route-info-tablet': isTablet,
+        'route-info-tablet-landscape': isTablet && isLandscape,
+      }"
+    >
+      <div class="route-info-content">
+        <span class="route-name">{{ currentRoute.name }}</span>
+        <DifficultyTag :grade="currentRoute.data.grade" />
+      </div>
     </div>
     
   </div>
@@ -47,6 +62,7 @@ import { onBeforeUnmount, onMounted, ref, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import plywood from '@/assets/images/plywood.jpg'
 import ActionButtons from './ActionButtons.vue'
+import DifficultyTag from './DifficultyTag.vue'
 import { useRoutesStore } from '@/stores/routes'
 import type { Route, Hold } from '@/interfaces/interfaces.ts'
 import { HoldType } from '@/interfaces/interfaces.ts'
@@ -63,6 +79,7 @@ const isWide = ref(false)
 const ratio = ref(1)
 const isMobile = ref(false)
 const isTablet = ref(false)
+const isLandscape = ref(false)
 
 const configKonva = ref({
   width: 200,
@@ -182,8 +199,10 @@ function isWideScreen(width?: number, height?: number) {
   isWide.value = ratio.value > 0.78
   
   const viewportWidth = window.innerWidth
+  const viewportHeight = window.innerHeight
   isMobile.value = viewportWidth < 640
   isTablet.value = viewportWidth >= 640 && viewportWidth < 1024
+  isLandscape.value = viewportWidth > viewportHeight
   
   if (stage.value && mainLayer.value) {
     const konvaStage = stage.value.getNode()
@@ -203,6 +222,7 @@ onMounted(async () => {
     const routeToEdit = routesStore.routes.find((r) => r.id === routeId)
     if (routeToEdit) {
       currentRoute.value = routeToEdit
+      console.log('Route loaded:', routeToEdit.name, routeToEdit.data.grade)
       
       if (routeToEdit.data?.problem?.holds) {
         routeToEdit.data.problem.holds.forEach((hold) => {
@@ -230,8 +250,12 @@ onMounted(async () => {
   
   handleResize = () => {
     isWideScreen()
+    // Update landscape orientation
+    isLandscape.value = window.innerWidth > window.innerHeight
   }
   window.addEventListener('resize', handleResize)
+  // Initialize landscape state
+  isLandscape.value = window.innerWidth > window.innerHeight
 
   observer = new ResizeObserver(() => {
     setTimeout(() => {
@@ -395,31 +419,31 @@ async function initKonva() {
   display: block;
 }
 
-.box {
-  display: flex !important;
-  justify-content: center !important;
+  .box {
+    display: flex !important;
+    justify-content: center !important;
 }
 
 @media (max-width: 640px) {
   /* Mobile: use nearly all available screen space */
   .canvas-container {
-    width: min(calc(100vw - 8px), calc((100vh - 120px) * 0.78));
+    width: min(calc(100vw - 8px), calc((100vh - 200px) * 0.78));
     max-width: 100vw;
-    max-height: calc(100vh - 120px);
+    max-height: calc(100vh - 200px);
     border-radius: 12px;
   }
-  .box {
+  .route-edit-container.box {
     align-items: flex-start !important;
     padding: 4px !important;
-    padding-bottom: 80px !important;
+    padding-bottom: 0 !important;
   }
-  .box.session-route {
-    padding-bottom: 4px !important;
+  .route-edit-container.box.session-route {
+    padding-bottom: 0 !important;
   }
-  .box.session-route .canvas-container {
-    max-height: calc(100vh - 100px) !important;
+  .route-edit-container.box.session-route .canvas-container {
+    max-height: calc(100vh - 180px) !important;
   }
-
+  
   :deep(canvas) {
     touch-action: none;
     -webkit-touch-callout: none;
@@ -457,6 +481,110 @@ async function initKonva() {
     -webkit-tap-highlight-color: transparent;
     touch-action: none;
     user-select: none;
+  }
+}
+
+/* Ensure canvas container doesn't block bottom menu */
+  .canvas-container {
+  pointer-events: auto;
+}
+
+/* Ensure route edit container doesn't cover bottom menu */
+.route-edit-container {
+  z-index: 1;
+  position: relative;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  padding-bottom: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+/* Route info bar */
+.route-info-bar {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  background: white;
+  padding: 12px 20px;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  z-index: 998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+.route-info-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.route-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Mobile: bottom above menu */
+@media (max-width: 640px) {
+  .route-info-bar {
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    top: auto;
+    padding: 10px 16px;
+    border-radius: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: auto;
+    max-width: calc(100vw - 32px);
+    z-index: 999;
+  }
+  
+  .route-info-content {
+    gap: 10px;
+  }
+  
+  .route-name {
+    font-size: 14px;
+    max-width: 200px;
+    color: #333;
+    display: block;
+  }
+}
+
+/* Tablet portrait: bottom above menu */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .route-info-bar {
+    bottom: 100px;
+    top: auto;
+    padding: 12px 18px;
+  }
+  
+  .route-name {
+    font-size: 15px;
+    max-width: 250px;
+  }
+}
+
+/* Tablet landscape: top of screen */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .route-info-bar.route-info-tablet-landscape {
+    top: 16px;
+    bottom: auto;
+  }
+}
+
+/* Desktop: bottom above menu */
+@media (min-width: 1025px) {
+  .route-info-bar {
+    bottom: 105px;
+    top: auto;
   }
 }
 

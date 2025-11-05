@@ -1,20 +1,12 @@
 <template>
-  <div
-    class="absolute bottom-0 w-full text-color-[#007bff] text-sm font-medium overflow-hidden bottom-menu-container"
-    style="color: var(--primarycolor, #007bff); opacity: 1"
-  >
+  <div class="absolute bottom-0 w-full overflow-hidden bottom-menu-container">
     <div
-      class="bg-white w-full h-full rounded-3xl px-3 mx-auto flex items-center justify-between bottom-menu-inner"
-      style="
-        box-shadow:
-          rgba(0, 0, 0, 0.16) 0px 10px 36px 0px,
-          rgba(0, 0, 0, 0.06) 0px 0px 0px 1px;
-      "
+      class="bg-white h-full rounded-3xl mx-auto flex items-center justify-center bottom-menu-inner"
     >
       <router-link to="/routes">
         <div class="menuitem" :class="route.path === '/routes' ? 'active' : ''">
-          <img src="@/assets/images/path.svg" alt="Logo" class="icon icon-image" />
-          <div class="title hidden min-[320px]:block">Boulders</div>
+          <img src="@/assets/images/path.svg" alt="Boulders" class="icon icon-image" />
+          <div class="title" v-if="route.path === '/routes'">Boulders</div>
         </div>
       </router-link>
       <router-link to="/edit">
@@ -22,17 +14,17 @@
           <div class="icon icon-pi">
             <div class="pi pi-file-edit"></div>
           </div>
-          <div class="title hidden min-[320px]:block">Edit</div>
+          <div class="title" v-if="route.path === '/edit'">Edit</div>
         </div>
       </router-link>
       <router-link to="/session">
         <div class="menuitem relative" :class="route.path === '/session' ? 'active' : ''">
           <img
             src="@/assets/images/climber.svg"
-            alt="Logo"
+            alt="Climb"
             class="mt-[-4px] icon icon-image"
           />
-          <div class="title hidden min-[320px]:block">Climb</div>
+          <div class="title" v-if="route.path === '/session'">Climb</div>
         </div>
       </router-link>
       <router-link to="/live">
@@ -40,9 +32,9 @@
           <img
             class="icon icon-image"
             src="@/assets/images/camera.svg"
-            alt="Logo"
+            alt="Live"
           />
-          <div class="title hidden min-[320px]:block sm:text-xs">Live</div>
+          <div class="title" v-if="route.path === '/live'">Live</div>
         </div>
       </router-link>
       <router-link to="/settings">
@@ -50,167 +42,217 @@
           <div class="icon icon-pi">
             <span class="pi pi-cog"></span>
           </div>
-          <div class="title hidden min-[320px]:block">Settings</div>
+          <div class="title" v-if="route.path === '/settings'">Settings</div>
         </div>
       </router-link>
     </div>
   </div>
 </template>
+
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
 const route = useRoute()
 </script>
+
 <style lang="scss" scoped>
 .bottom-menu-container {
-  height: 100px;
-  padding: 12px;
+  height: 80px;
+  min-height: 80px;
+  padding: 8px;
   z-index: 1000;
+  pointer-events: auto;
+  touch-action: manipulation;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
 }
 
 .bottom-menu-inner {
-  width: 90vw;
-  min-width: 300px;
-  height: 76px;
+  width: fit-content !important;
+  max-width: calc(100% - 10px);
+  height: 64px;
+  padding: 0 5px;
+  gap: 8px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.bottom-menu-inner a {
+  text-decoration: none;
+  color: black;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+}
+
+.menuitem {
+  transition: all 0.2s ease-in-out;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-radius: 9999px;
+  min-width: 44px;
+  pointer-events: auto;
+  touch-action: manipulation;
+  cursor: pointer;
 }
 
 .active {
   font-weight: 600;
-  transform: scale(1.3) translateY(-2px);
+  background-color: black;
+  padding: 8px 16px 8px 14px !important;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
-.menuitem {
-  transition: transform 0.2s ease-in-out;
-  height: 40px;
-  display: grid;
-  grid-template-rows: 30px 10px;
-  font-size: 12px;
-  align-items: center;
-  justify-items: center;
-  margin: 0 12px;
+.title {
+  color: black;
+  font-size: 13px;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.active .title {
+  color: white;
 }
 
 .icon-image {
-  height: 20px;
-  width: 20px;
+  height: 24px;
+  width: 24px;
   object-fit: contain;
+  filter: brightness(0);
+  flex-shrink: 0;
+}
+
+.active .icon-image {
+  filter: brightness(0) invert(1);
 }
 
 .icon-pi {
-  font-size: 20px;
+  font-size: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
+  color: black;
+  flex-shrink: 0;
+}
+
+.active .icon-pi {
+  color: white;
 }
 
 .icon-pi .pi,
 .icon-pi span,
 .icon-pi div {
-  font-size: 20px;
+  font-size: 24px;
   line-height: 1;
+  color: inherit;
 }
 
 @media (min-width: 641px) and (max-width: 1024px) {
   .bottom-menu-container {
-    height: 140px;
-    padding: 16px;
+    height: 85px;
+    min-height: 85px;
+    padding: 8px;
   }
 
   .bottom-menu-inner {
-    width: 40vw;
-    min-width: 400px;
-    height: 108px;
-    padding: 0 24px;
-    justify-content: space-between;
+    width: fit-content !important;
+    max-width: calc(100% - 10px);
+    height: 69px;
+    padding: 0 5px;
+    gap: 8px;
+    box-sizing: border-box;
+    flex-shrink: 0;
   }
 
   .menuitem {
-    height: 60px;
-    grid-template-rows: 45px 15px;
-    font-size: 16px;
-    margin: 0;
-    flex-shrink: 0;
+    gap: 8px;
+    padding: 8px 0;
+    min-width: 44px;
   }
 
-  .bottom-menu-inner a {
-    display: flex;
-    justify-content: center;
-    flex-shrink: 0;
+  .active {
+    padding: 8px 16px 8px 14px !important;
+  }
+
+  .title {
+    font-size: 14px;
   }
 
   .icon-image {
-    height: 32px;
-    width: 32px;
-    object-fit: contain;
+    height: 28px;
+    width: 28px;
   }
 
   .icon-pi {
-    font-size: 32px;
-    width: 32px;
-    height: 32px;
+    font-size: 28px;
+    width: 28px;
+    height: 28px;
   }
 
   .icon-pi .pi,
   .icon-pi span,
   .icon-pi div {
-    font-size: 32px;
-    line-height: 1;
-  }
-
-  .active {
-    transform: scale(1.25) translateY(-4px);
+    font-size: 28px;
   }
 }
 
 @media (min-width: 1025px) {
   .bottom-menu-container {
-    height: 120px;
-    padding: 14px;
+    height: 90px;
+    min-height: 90px;
+    padding: 10px;
   }
 
   .bottom-menu-inner {
-    width: 34vw;
-    height: 92px;
-    padding: 0 24px;
-    justify-content: space-between;
+    width: fit-content !important;
+    max-width: calc(100% - 20px);
+    height: 70px;
+    padding: 0 5px;
+    gap: 10px;
+    box-sizing: border-box;
+    flex-shrink: 0;
   }
 
   .menuitem {
-    height: 50px;
-    grid-template-rows: 38px 12px;
-    font-size: 14px;
-    margin: 0;
-    flex-shrink: 0;
+    gap: 10px;
+    padding: 10px 0;
+    min-width: 48px;
   }
 
-  .bottom-menu-inner a {
-    display: flex;
-    justify-content: center;
-    flex-shrink: 0;
+  .active {
+    padding: 10px 20px 10px 18px !important;
+  }
+
+  .title {
+    font-size: 15px;
   }
 
   .icon-image {
-    height: 24px;
-    width: 24px;
-    object-fit: contain;
+    height: 28px;
+    width: 28px;
   }
 
   .icon-pi {
-    font-size: 24px;
-    width: 24px;
-    height: 24px;
+    font-size: 28px;
+    width: 28px;
+    height: 28px;
   }
 
   .icon-pi .pi,
   .icon-pi span,
   .icon-pi div {
-    font-size: 24px;
-    line-height: 1;
-  }
-
-  .active {
-    transform: scale(1.25) translateY(-3px);
+    font-size: 28px;
   }
 }
 </style>

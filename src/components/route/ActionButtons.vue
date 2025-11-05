@@ -275,7 +275,8 @@ const mobileActionItems = computed(() => [
     position: fixed;
     left: 50%;
     transform: translateX(-50%);
-    bottom: calc(100px + 8px);
+    top: max(16px, env(safe-area-inset-top, 16px));
+    bottom: auto;
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -284,7 +285,7 @@ const mobileActionItems = computed(() => [
     backdrop-filter: blur(10px);
     border-radius: 20px;
     box-shadow: 0 4px 20px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05);
-    z-index: 1000;
+    z-index: 1001;
     pointer-events: auto;
   }
   .mobile-action-btn {
