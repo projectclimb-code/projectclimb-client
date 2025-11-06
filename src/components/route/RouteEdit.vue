@@ -69,12 +69,15 @@ import { HoldType } from '@/interfaces/interfaces.ts'
 import { websocketService } from '@/services/ws.service'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
+import { useDialog } from 'primevue/usedialog'
+import CancelDialog from './CancelDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
 const routesStore = useRoutesStore()
 const toast = useToast()
 const confirm = useConfirm()
+const dialog = useDialog()
 const isSessionRoute = computed(() => route.path === '/session')
 
 const box = ref(null)
@@ -161,21 +164,14 @@ async function handleSave() {
 }
 
 function handleCancel() {
-  confirm.require({
-    message: 'Are you sure you want to cancel?',
-    header: 'Cancel',
-    icon: 'pi pi-exclamation-triangle',
-    rejectProps: {
-      label: 'No',
-      severity: 'secondary',
-      outlined: true
-    },
-    acceptProps: {
-      label: 'Yes',
-      severity: 'danger'
-    },
-    accept: () => {
-      router.push('/routes')
+  dialog.open(CancelDialog, {
+    props: {
+      header: '',
+      style: { width: '90vw', maxWidth: '480px' },
+      modal: true,
+      dismissableMask: true,
+      closable: false,
+      closeOnEscape: true
     }
   })
 }
@@ -658,6 +654,18 @@ async function initKonva() {
     bottom: 105px;
     top: auto;
   }
+}
+
+/* Cancel Dialog wrapper styling */
+:deep(.p-dialog) {
+  border-radius: 20px !important;
+  overflow: hidden;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05) !important;
+  border: none !important;
+}
+
+:deep(.p-dialog .p-dialog-content) {
+  padding: 0 !important;
 }
 
 </style>
