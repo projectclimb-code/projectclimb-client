@@ -67,10 +67,14 @@ import { useRoutesStore } from '@/stores/routes'
 import type { Route, Hold } from '@/interfaces/interfaces.ts'
 import { HoldType } from '@/interfaces/interfaces.ts'
 import { websocketService } from '@/services/ws.service'
+import { useToast } from 'primevue/usetoast'
+import { useConfirm } from 'primevue/useconfirm'
 
 const route = useRoute()
 const router = useRouter()
 const routesStore = useRoutesStore()
+const toast = useToast()
+const confirm = useConfirm()
 const isSessionRoute = computed(() => route.path === '/session')
 
 const box = ref(null)
@@ -97,8 +101,16 @@ const currentRoute = ref<Route | null>(null)
 let observer: ResizeObserver | null = null
 
 async function handleSave() {
+  console.log('handleSave called', { currentRoute: currentRoute.value })
+  
   if (!currentRoute.value || !currentRoute.value.id) {
-    console.error('No route to save')
+    console.warn('No route to save')
+    toast.add({
+      severity: 'warn',
+      summary: 'Warning',
+      detail: 'No route to save',
+      life: 3000
+    })
     return
   }
 
@@ -126,16 +138,46 @@ async function handleSave() {
     },
   }
 
+  console.log('Saving route:', updatedRoute)
+
   try {
     await routesStore.saveRoute(updatedRoute)
-    router.push('/routes')
+    console.log('Route saved successfully')
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'Saved successfully',
+      life: 3000
+    })
   } catch (error) {
     console.error('Failed to save route:', error)
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to save',
+      life: 3000
+    })
   }
 }
 
 function handleCancel() {
-  router.push('/routes')
+  confirm.require({
+    message: 'Are you sure you want to cancel?',
+    header: 'Cancel',
+    icon: 'pi pi-exclamation-triangle',
+    rejectProps: {
+      label: 'No',
+      severity: 'secondary',
+      outlined: true
+    },
+    acceptProps: {
+      label: 'Yes',
+      severity: 'danger'
+    },
+    accept: () => {
+      router.push('/routes')
+    }
+  })
 }
 
 function handleEditInfo() {
@@ -144,8 +186,24 @@ function handleEditInfo() {
 }
 
 function handleFlip() {
-  // TODO: Implement flip functionality
-  console.log('Flip clicked')
+  confirm.require({
+    message: 'Are you sure you want to flip your selections?',
+    header: 'Flip Selections',
+    icon: 'pi pi-exclamation-triangle',
+    rejectProps: {
+      label: 'No',
+      severity: 'secondary',
+      outlined: true
+    },
+    acceptProps: {
+      label: 'Yes',
+      severity: 'warning'
+    },
+    accept: () => {
+      // TODO: Implement flip functionality
+      console.log('Flip confirmed')
+    }
+  })
 }
 
 function preview() {
@@ -160,11 +218,23 @@ function preview() {
 function activateStartMode() {
   startMode.value = true
   endMode.value = false
+  toast.add({
+    severity: 'info',
+    summary: 'Start',
+    detail: 'Select two elements to start',
+    life: 3000
+  })
 }
 
 function activateEndMode() {
   endMode.value = true
   startMode.value = false
+  toast.add({
+    severity: 'info',
+    summary: 'End',
+    detail: 'Select one end element',
+    life: 3000
+  })
 }
 
 function isWideScreen(width?: number, height?: number) {
@@ -239,13 +309,15 @@ onMounted(async () => {
   }
   
   setTimeout(() => {
-    const konvaStage = stage.value.getNode()
-    initKonva()
-    
-    setTimeout(() => {
-      isWideScreen()
-      updatePathColors()
-    }, 50)
+    if (stage.value) {
+      const konvaStage = stage.value.getNode()
+      initKonva()
+      
+      setTimeout(() => {
+        isWideScreen()
+        updatePathColors()
+      }, 50)
+    }
   }, 100)
   
   handleResize = () => {
