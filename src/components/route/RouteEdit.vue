@@ -258,9 +258,22 @@ function handleFlip() {
 function preview() {
   websocketService.send({
     type: 'preview',
-    startHolds: [...selectedStarts.value],
-    finishHold: selectedEnd.value || null,
-    holds: Array.from(selectedNormalPositions.value),
+    route: {
+      data: {
+        problem: {
+          holds: [
+            ...selectedStarts.value.map((id) => ({ id, type: HoldType.start })),
+            ...Array.from(selectedNormalPositions.value).map((id) => ({
+              id,
+              type: HoldType.normal,
+            })),
+            ...(selectedEnd.value
+              ? [{ id: selectedEnd.value, type: HoldType.finish }]
+              : []),
+          ],
+        },
+      }
+    }
   })
 }
 
