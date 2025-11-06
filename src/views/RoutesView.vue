@@ -58,16 +58,5 @@ function createRoute() {
       ></RouteView>
     </div>
 
-    <div
-      @click="createRoute"
-      class="fixed right-0 top-10 bg-white rounded-l-full h-[60px] w-[80px] flex items-center justify-start shadow-lg pl-3 z-10"
-      style="box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px"
-    >
-      <div
-        class="rounded-full bg-[#4095f2] text-white w-[40px] h-[40px] flex flex-col items-center justify-center cursor-pointer"
-      >
-        <div class="text-3xl -mt-1">+</div>
-      </div>
-    </div>
   </div>
 </template>
