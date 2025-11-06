@@ -20,40 +20,41 @@ export async function routesGet() {
   return data // or just `data` if the API returns an array
 }
 
-export async function routesCreate() {
+export async function routesCreate(name: string, grade: string) {
+  console.log('routesCreate service called:', { name, grade, API_BASE_URL })
   const data = {
-    name: 'Warm Up Eagle',
+    name: name,
     data: {
-      grade: '6a',
+      grade: grade,
       author: 'Trinity',
       problem: {
         holds: [
-          { id: '130', type: 'start', next: 6, hand: 'l' },
-          { id: '42', type: 'start', next: 6, hand: 'l' },
-          { id: '113', type: 'normal', next: 101, hand: 'r' },
-          { id: '41', type: 'normal', next: 55, hand: 'r' },
-          { id: '127', type: 'normal', next: 133, hand: 'l' },
-          { id: '124', type: 'normal', next: 11, hand: 'r' },
-          { id: '106', type: 'finish', next: null, hand: 'r' },
         ],
       },
     },
   }
 
+  console.log('Sending data to API:', JSON.stringify(data, null, 2))
   const response = await fetch(API_BASE_URL, {
     method: 'POST',
     headers,
     body: JSON.stringify(data),
   })
+  
+  console.log('API response status:', response.status, response.statusText)
+  
   if (!response.ok) {
-    throw new Error(`Failed to create route: ${response.status}`)
+    const errorText = await response.text()
+    console.error('API error response:', errorText)
+    throw new Error(`Failed to create route: ${response.status} - ${errorText}`)
   }
   const res = await response.json()
-  return res // or just `data` if the API returns an array
+  console.log('API response data:', res)
+  return res
 }
 
 export async function routesDelete(id: number) {
-  const response = await fetch(`https://climber.dev.maptnh.net/api/routes/${id}/`, {
+  const response = await fetch(`${API_BASE_URL}${id}/`, {
     method: 'DELETE',
     headers,
   })
@@ -68,7 +69,7 @@ export async function routeUpdate(route: Route) {
   if (!route.id) {
     throw new Error('Route ID is required for update')
   }
-  const response = await fetch(`https://climber.dev.maptnh.net/api/routes/${route.id}/`, {
+  const response = await fetch(`${API_BASE_URL}${route.id}/`, {
     method: 'PATCH',
     headers,
     body: JSON.stringify(route),

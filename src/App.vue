@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import BottomMenu from './components/navigation/BottomMenu.vue'
+import Toast from 'primevue/toast'
+import ConfirmDialog from 'primevue/confirmdialog'
+import DynamicDialog from 'primevue/dynamicdialog'
 // import SideMenu from './components/navigation/SideMenu.vue'
 
 onMounted(() => {
@@ -16,6 +19,9 @@ onMounted(() => {
       </transition>
     </router-view>
     <BottomMenu />
+    <Toast />
+    <ConfirmDialog />
+    <DynamicDialog />
   </div>  
 </template>
 

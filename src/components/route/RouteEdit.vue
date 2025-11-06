@@ -67,10 +67,18 @@ import { useRoutesStore } from '@/stores/routes'
 import type { Route, Hold } from '@/interfaces/interfaces.ts'
 import { HoldType } from '@/interfaces/interfaces.ts'
 import { websocketService } from '@/services/ws.service'
+import { useToast } from 'primevue/usetoast'
+import { useConfirm } from 'primevue/useconfirm'
+import { useDialog } from 'primevue/usedialog'
+import CancelDialog from './CancelDialog.vue'
+import CreateBoulderDialog from './CreateBoulderDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
 const routesStore = useRoutesStore()
+const toast = useToast()
+const confirm = useConfirm()
+const dialog = useDialog()
 const isSessionRoute = computed(() => route.path === '/session')
 
 const box = ref(null)
@@ -97,8 +105,16 @@ const currentRoute = ref<Route | null>(null)
 let observer: ResizeObserver | null = null
 
 async function handleSave() {
+  console.log('handleSave called', { currentRoute: currentRoute.value })
+  
   if (!currentRoute.value || !currentRoute.value.id) {
-    console.error('No route to save')
+    console.warn('No route to save')
+    toast.add({
+      severity: 'warn',
+      summary: 'Warning',
+      detail: 'No route to save',
+      life: 3000
+    })
     return
   }
 
@@ -126,26 +142,117 @@ async function handleSave() {
     },
   }
 
+  console.log('Saving route:', updatedRoute)
+
   try {
     await routesStore.saveRoute(updatedRoute)
-    router.push('/routes')
+    console.log('Route saved successfully')
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'Saved successfully',
+      life: 3000
+    })
   } catch (error) {
     console.error('Failed to save route:', error)
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to save',
+      life: 3000
+    })
   }
 }
 
 function handleCancel() {
-  router.push('/routes')
+  dialog.open(CancelDialog, {
+    props: {
+      header: '',
+      style: { width: '90vw', maxWidth: '480px' },
+      modal: true,
+      dismissableMask: true,
+      closable: false,
+      closeOnEscape: true
+    }
+  })
 }
 
 function handleEditInfo() {
-  // TODO: Implement edit info functionality
-  console.log('Edit info clicked')
+  if (!currentRoute.value) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Warning',
+      detail: 'No route to edit',
+      life: 3000
+    })
+    return
+  }
+
+  dialog.open(CreateBoulderDialog, {
+    data: {
+      route: currentRoute.value
+    },
+    props: {
+      header: '',
+      style: { width: '90vw', maxWidth: '420px' },
+      modal: true,
+      dismissableMask: true,
+      closable: false,
+      closeOnEscape: true
+    },
+    onClose: async (result) => {
+      const data = result?.data
+      if (data && data.name && data.grade && data.isEdit && currentRoute.value) {
+        try {
+          const updatedRoute: Route = {
+            ...currentRoute.value,
+            name: data.name,
+            data: {
+              ...currentRoute.value.data,
+              grade: data.grade
+            }
+          }
+          await routesStore.saveRoute(updatedRoute)
+          currentRoute.value = updatedRoute
+          toast.add({
+            severity: 'success',
+            summary: 'Success',
+            detail: 'Route updated successfully',
+            life: 3000
+          })
+        } catch (error) {
+          console.error('Failed to update route:', error)
+          toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: 'Failed to update route',
+            life: 3000
+          })
+        }
+      }
+    }
+  })
 }
 
 function handleFlip() {
-  // TODO: Implement flip functionality
-  console.log('Flip clicked')
+  confirm.require({
+    message: 'Are you sure you want to flip your selections?',
+    header: 'Flip Selections',
+    icon: 'pi pi-exclamation-triangle',
+    rejectProps: {
+      label: 'No',
+      severity: 'secondary',
+      outlined: true
+    },
+    acceptProps: {
+      label: 'Yes',
+      severity: 'warning'
+    },
+    accept: () => {
+      // TODO: Implement flip functionality
+      console.log('Flip confirmed')
+    }
+  })
 }
 
 function preview() {
@@ -160,11 +267,23 @@ function preview() {
 function activateStartMode() {
   startMode.value = true
   endMode.value = false
+  toast.add({
+    severity: 'info',
+    summary: 'Start',
+    detail: 'Select two elements to start',
+    life: 3000
+  })
 }
 
 function activateEndMode() {
   endMode.value = true
   startMode.value = false
+  toast.add({
+    severity: 'info',
+    summary: 'End',
+    detail: 'Select one end element',
+    life: 3000
+  })
 }
 
 function isWideScreen(width?: number, height?: number) {
@@ -239,13 +358,15 @@ onMounted(async () => {
   }
   
   setTimeout(() => {
-    const konvaStage = stage.value.getNode()
-    initKonva()
-    
-    setTimeout(() => {
-      isWideScreen()
-      updatePathColors()
-    }, 50)
+    if (stage.value) {
+      const konvaStage = stage.value.getNode()
+      initKonva()
+      
+      setTimeout(() => {
+        isWideScreen()
+        updatePathColors()
+      }, 50)
+    }
   }, 100)
   
   handleResize = () => {
@@ -586,6 +707,18 @@ async function initKonva() {
     bottom: 105px;
     top: auto;
   }
+}
+
+/* Cancel Dialog wrapper styling */
+:deep(.p-dialog) {
+  border-radius: 20px !important;
+  overflow: hidden;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05) !important;
+  border: none !important;
+}
+
+:deep(.p-dialog .p-dialog-content) {
+  padding: 0 !important;
 }
 
 </style>
