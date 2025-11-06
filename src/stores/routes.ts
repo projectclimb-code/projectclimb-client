@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { routesDelete, routesGet, routesCreate, routeUpdate } from '@/services/routes.service'
 import type { Route } from '@/interfaces/interfaces.ts'
+import type { ClimbingRouteGrade } from '@/interfaces/interfaces.ts'
 
 export const useRoutesStore = defineStore('routes', () => {
   const routes = ref<Route[]>([])
@@ -10,22 +11,29 @@ export const useRoutesStore = defineStore('routes', () => {
     routes.value = await routesGet()
   }
 
-  async function createRoute() {
-    const response = await routesCreate()
-    routes.value.push(response)
-    return response
+  async function createRoute(name: string, grade: ClimbingRouteGrade) {
+    console.log('createRoute called in store:', { name, grade })
+    try {
+      const response = await routesCreate(name, grade)
+      console.log('routesCreate response:', response)
+      routes.value.push(response)
+      return response
+    } catch (error) {
+      console.error('Error in createRoute store:', error)
+      throw error
+    }
   }
 
-  async function deleteRoute(id: string) {
+  async function deleteRoute(id: number) {
     await routesDelete(id)
     getRoutes()
     return id
   }
 
   async function saveRoute(route: Route) {
-    await routeUpdate(route)
-    routes.value = routes.value.map((r) => (r.id === route.id ? route : r))
-    return route
+    const updatedRoute = await routeUpdate(route)
+    routes.value = routes.value.map((r) => (r.id === route.id ? updatedRoute : r))
+    return updatedRoute
   }
 
   return { routes, deleteRoute, getRoutes, saveRoute, createRoute }
