@@ -9,14 +9,16 @@
           <div class="title" v-if="route.path === '/routes'">Boulders</div>
         </div>
       </router-link>
-      <router-link to="/edit">
+      <div @click="handleEditClick" class="edit-menu-item">
         <div class="menuitem" :class="route.path === '/edit' ? 'active' : ''">
           <div class="icon icon-pi">
-            <div class="pi pi-file-edit"></div>
+            <div :class="isEditingRoute ? 'pi pi-file-edit' : 'pi pi-plus'"></div>
           </div>
-          <div class="title" v-if="route.path === '/edit'">Edit</div>
+          <div class="title" v-if="route.path === '/edit'">
+            {{ isEditingRoute ? 'Edit' : 'New' }}
+          </div>
         </div>
-      </router-link>
+      </div>
       <router-link to="/session">
         <div class="menuitem relative" :class="route.path === '/session' ? 'active' : ''">
           <img
@@ -50,8 +52,54 @@
 </template>
 
 <script setup lang="ts">
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { computed } from 'vue'
+import { useRoutesStore } from '@/stores/routes'
+import { useDialog } from 'primevue/usedialog'
+import CreateBoulderDialog from '@/components/route/CreateBoulderDialog.vue'
+
 const route = useRoute()
+const router = useRouter()
+const routesStore = useRoutesStore()
+const dialog = useDialog()
+
+const isEditingRoute = computed(() => {
+  return route.path === '/edit' && route.query.id !== undefined
+})
+
+function handleEditClick() {
+  // If already editing, show dialog to create new route
+  // If not on edit page, show dialog to create new route
+  dialog.open(CreateBoulderDialog, {
+    props: {
+      header: '',
+      width: '90vw',
+      style: { maxWidth: '420px' },
+      modal: true,
+      dismissableMask: true,
+      closable: false,
+      closeOnEscape: true,
+    },
+    onClose: async (result) => {
+      console.log('Dialog onClose called with result:', result)
+      const data = result?.data
+      if (data && data.name && data.grade) {
+        console.log('Creating route with:', { name: data.name, grade: data.grade })
+        try {
+          const newRoute = await routesStore.createRoute(data.name, data.grade)
+          console.log('Route created:', newRoute)
+          if (newRoute && newRoute.id) {
+            router.push(`/edit?id=${newRoute.id}`)
+          }
+        } catch (error) {
+          console.error('Failed to create route:', error)
+        }
+      } else {
+        console.warn('Dialog closed without valid data:', result)
+      }
+    },
+  })
+}
 </script>
 
 <style lang="scss" scoped>
@@ -79,7 +127,8 @@ const route = useRoute()
   flex-shrink: 0;
 }
 
-.bottom-menu-inner a {
+.bottom-menu-inner a,
+.edit-menu-item {
   text-decoration: none;
   color: black;
   display: flex;
@@ -88,6 +137,7 @@ const route = useRoute()
   pointer-events: auto;
   touch-action: manipulation;
   -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+  cursor: pointer;
 }
 
 .menuitem {
