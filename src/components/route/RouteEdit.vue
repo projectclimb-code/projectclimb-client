@@ -71,6 +71,7 @@ import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import { useDialog } from 'primevue/usedialog'
 import CancelDialog from './CancelDialog.vue'
+import CreateBoulderDialog from './CreateBoulderDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -177,8 +178,60 @@ function handleCancel() {
 }
 
 function handleEditInfo() {
-  // TODO: Implement edit info functionality
-  console.log('Edit info clicked')
+  if (!currentRoute.value) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Warning',
+      detail: 'No route to edit',
+      life: 3000
+    })
+    return
+  }
+
+  dialog.open(CreateBoulderDialog, {
+    data: {
+      route: currentRoute.value
+    },
+    props: {
+      header: '',
+      style: { width: '90vw', maxWidth: '420px' },
+      modal: true,
+      dismissableMask: true,
+      closable: false,
+      closeOnEscape: true
+    },
+    onClose: async (result) => {
+      const data = result?.data
+      if (data && data.name && data.grade && data.isEdit && currentRoute.value) {
+        try {
+          const updatedRoute: Route = {
+            ...currentRoute.value,
+            name: data.name,
+            data: {
+              ...currentRoute.value.data,
+              grade: data.grade
+            }
+          }
+          await routesStore.saveRoute(updatedRoute)
+          currentRoute.value = updatedRoute
+          toast.add({
+            severity: 'success',
+            summary: 'Success',
+            detail: 'Route updated successfully',
+            life: 3000
+          })
+        } catch (error) {
+          console.error('Failed to update route:', error)
+          toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: 'Failed to update route',
+            life: 3000
+          })
+        }
+      }
+    }
+  })
 }
 
 function handleFlip() {

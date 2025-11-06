@@ -2,10 +2,12 @@
   <div class="create-boulder-dialog">
     <div class="dialog-header">
       <div class="header-icon">
-        <i class="pi pi-plus-circle"></i>
+        <i :class="isEditMode ? 'pi pi-file-edit' : 'pi pi-plus-circle'"></i>
       </div>
-      <h3 class="dialog-title">Create New Boulder</h3>
-      <p class="dialog-description">Enter a name and select a grade for your new boulder route.</p>
+      <h3 class="dialog-title">{{ isEditMode ? 'Edit Boulder' : 'Create New Boulder' }}</h3>
+      <p class="dialog-description">
+        {{ isEditMode ? 'Update the name and grade for this boulder route.' : 'Enter a name and select a grade for your new boulder route.' }}
+      </p>
     </div>
     <div class="dialog-content">
       <div class="form-field">
@@ -19,7 +21,7 @@
           placeholder="Enter boulder name"
           class="w-full custom-input"
           autofocus
-          @keyup.enter="handleCreate"
+          @keyup.enter="handleSubmit"
         />
       </div>
       <div class="form-field">
@@ -50,11 +52,11 @@
           </template>
         </Button>
         <Button
-          label="Create"
+          :label="isEditMode ? 'Update' : 'Create'"
           type="button"
           class="action-button create-button"
           :disabled="!boulderName || !selectedGrade"
-          @click="handleCreate"
+          @click="handleSubmit"
         >
           <template #icon>
             <i class="pi pi-check"></i>
@@ -66,21 +68,40 @@
 </template>
 
 <script setup lang="ts">
-import { ref, inject } from 'vue'
+import { ref, inject, computed, onMounted } from 'vue'
 import InputText from 'primevue/inputtext'
 import Dropdown from 'primevue/dropdown'
 import Button from 'primevue/button'
 import { ClimbingRouteGrade } from '@/interfaces/interfaces'
+import type { Route } from '@/interfaces/interfaces'
 
 const dialogRef = inject<any>('dialogRef')
 
 const boulderName = ref('')
 const selectedGrade = ref<ClimbingRouteGrade | null>(null)
 
+// Get initial data from dialogRef if editing
+const initialData = computed(() => {
+  return dialogRef?.value?.data as { route?: Route } | undefined
+})
+
+const isEditMode = computed(() => {
+  return !!initialData.value?.route
+})
+
 const gradeOptions = Object.values(ClimbingRouteGrade).map((grade) => ({
   label: grade,
   value: grade,
 }))
+
+// Initialize form with existing route data if editing
+onMounted(() => {
+  if (isEditMode.value && initialData.value?.route) {
+    const route = initialData.value.route
+    boulderName.value = route.name || ''
+    selectedGrade.value = route.data?.grade || null
+  }
+})
 
 function handleCancel() {
   if (dialogRef?.value) {
@@ -88,11 +109,11 @@ function handleCancel() {
   }
 }
 
-function handleCreate() {
-  console.log('handleCreate called', { 
+function handleSubmit() {
+  console.log('handleSubmit called', { 
     boulderName: boulderName.value, 
     selectedGrade: selectedGrade.value,
-    dialogRef: dialogRef
+    isEditMode: isEditMode.value
   })
   
   if (!boulderName.value || !selectedGrade.value) {
@@ -106,6 +127,8 @@ function handleCreate() {
   const closeData = {
     name: boulderName.value.trim(),
     grade: selectedGrade.value,
+    isEdit: isEditMode.value,
+    route: initialData.value?.route
   }
   console.log('Closing dialog with data:', closeData)
   
