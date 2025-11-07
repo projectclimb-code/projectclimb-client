@@ -38,8 +38,7 @@ function createRoute() {
   dialog.open(CreateBoulderDialog, {
     props: {
       header: '',
-      width: '90vw',
-      style: { maxWidth: '420px' },
+      style: { width: '90vw', maxWidth: '420px' },
       modal: true,
       dismissableMask: true,
       closable: false,
