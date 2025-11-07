@@ -1,0 +1,1 @@
+import{R as e}from"./RouteEdit-CPp0dy-j.js";import{d as t,e as o,k as s,f as a,_}from"./index-CH0RtBGW.js";import"./DifficultyTag.vue_vue_type_script_setup_true_lang-gGtqeSFm.js";const c={class:"plywood-bg"},r=t({__name:"EditView",setup(d){return(i,n)=>(a(),o("div",c,[s(e)]))}}),l=_(r,[["__scopeId","data-v-2705123f"]]);export{l as default};
