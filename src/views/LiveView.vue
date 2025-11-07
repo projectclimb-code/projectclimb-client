@@ -6,8 +6,8 @@ import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils'
 
 const video = ref<HTMLVideoElement | null>(null)
 const output = ref<HTMLCanvasElement | null>(null)
-const selectedCamera = ref(null)
-const cameras = ref([])
+const selectedCamera = ref<{ name: string; code: string } | null>(null)
+const cameras = ref<{ name: string; code: string }[]>([])
 onMounted(() => {
   const videoElement = video.value as HTMLVideoElement
   const canvasElement = output.value as HTMLCanvasElement
@@ -104,7 +104,7 @@ function startCamera(deviceId: string) {
     </div>
 
     <div class="flex flex-col items-center">
-      <video ref="video" playsinline="" class="rounded-lg shadow mb-2 w-full max-w-md hidden"></video>
+      <video ref="video" :playsinline="true" class="rounded-lg shadow mb-2 w-full max-w-md hidden"></video>
       <canvas
         ref="output"
         class="rounded-lg shadow w-full max-w-md"

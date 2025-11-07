@@ -24,7 +24,7 @@ import { ref } from 'vue'
 
 const backgroundColor = ref('#000')
 const wallBackgroundColor = ref('#000')
-function switchVisibility(layer) {
+function switchVisibility(layer: string) {
   websocketService.send({ type: 'display', layer })
 }
 
