@@ -83,10 +83,10 @@ function handleEditClick() {
     onClose: async (result) => {
       console.log('Dialog onClose called with result:', result)
       const data = result?.data
-      if (data && data.name && data.grade) {
-        console.log('Creating route with:', { name: data.name, grade: data.grade })
+      if (data && data.name && data.grade && data.author) {
+        console.log('Creating route with:', { name: data.name, grade: data.grade, author: data.author })
         try {
-          const newRoute = await routesStore.createRoute(data.name, data.grade)
+          const newRoute = await routesStore.createRoute(data.name, data.grade, data.author)
           console.log('Route created:', newRoute)
           if (newRoute && newRoute.id) {
             router.push(`/edit?id=${newRoute.id}`)

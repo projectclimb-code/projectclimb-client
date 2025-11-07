@@ -20,13 +20,13 @@ export async function routesGet() {
   return data // or just `data` if the API returns an array
 }
 
-export async function routesCreate(name: string, grade: string) {
-  console.log('routesCreate service called:', { name, grade, API_BASE_URL })
+export async function routesCreate(name: string, grade: string, author: string) {
+  console.log('routesCreate service called:', { name, grade, author, API_BASE_URL })
   const data = {
     name: name,
     data: {
       grade: grade,
-      author: 'Trinity',
+      author: author || 'Trinity',
       problem: {
         holds: [
         ],

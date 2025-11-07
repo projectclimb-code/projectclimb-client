@@ -39,6 +39,19 @@
           class="w-full grade-dropdown custom-dropdown"
         />
       </div>
+      <div class="form-field">
+        <label for="boulderAuthor" class="form-label">
+          <i class="pi pi-user form-label-icon"></i>
+          Author
+        </label>
+        <InputText
+          id="boulderAuthor"
+          v-model="author"
+          placeholder="Enter author name"
+          class="w-full custom-input"
+          @keyup.enter="handleSubmit"
+        />
+      </div>
       <div class="dialog-actions">
         <Button
           label="Cancel"
@@ -79,6 +92,7 @@ const dialogRef = inject<any>('dialogRef')
 
 const boulderName = ref('')
 const selectedGrade = ref<ClimbingRouteGrade | null>(null)
+const author = ref('Trinity')
 
 // Get initial data from dialogRef if editing
 const initialData = computed(() => {
@@ -100,6 +114,7 @@ onMounted(() => {
     const route = initialData.value.route
     boulderName.value = route.name || ''
     selectedGrade.value = route.data?.grade || null
+    author.value = route.data?.author || 'Trinity'
   }
 })
 
@@ -127,6 +142,7 @@ function handleSubmit() {
   const closeData = {
     name: boulderName.value.trim(),
     grade: selectedGrade.value,
+    author: author.value.trim() || 'Trinity', // Default to 'Trinity' if empty
     isEdit: isEditMode.value,
     route: initialData.value?.route
   }

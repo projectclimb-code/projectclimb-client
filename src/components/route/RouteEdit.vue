@@ -202,14 +202,15 @@ function handleEditInfo() {
     },
     onClose: async (result) => {
       const data = result?.data
-      if (data && data.name && data.grade && data.isEdit && currentRoute.value) {
+      if (data && data.name && data.grade && data.author && data.isEdit && currentRoute.value) {
         try {
           const updatedRoute: Route = {
             ...currentRoute.value,
             name: data.name,
             data: {
               ...currentRoute.value.data,
-              grade: data.grade
+              grade: data.grade,
+              author: data.author
             }
           }
           await routesStore.saveRoute(updatedRoute)
@@ -267,23 +268,11 @@ function preview() {
 function activateStartMode() {
   startMode.value = true
   endMode.value = false
-  toast.add({
-    severity: 'info',
-    summary: 'Start',
-    detail: 'Select two elements to start',
-    life: 3000
-  })
 }
 
 function activateEndMode() {
   endMode.value = true
   startMode.value = false
-  toast.add({
-    severity: 'info',
-    summary: 'End',
-    detail: 'Select one end element',
-    life: 3000
-  })
 }
 
 function isWideScreen(width?: number, height?: number) {

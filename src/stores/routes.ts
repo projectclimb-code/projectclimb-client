@@ -11,10 +11,10 @@ export const useRoutesStore = defineStore('routes', () => {
     routes.value = await routesGet()
   }
 
-  async function createRoute(name: string, grade: ClimbingRouteGrade) {
-    console.log('createRoute called in store:', { name, grade })
+  async function createRoute(name: string, grade: ClimbingRouteGrade, author: string) {
+    console.log('createRoute called in store:', { name, grade, author })
     try {
-      const response = await routesCreate(name, grade)
+      const response = await routesCreate(name, grade, author)
       console.log('routesCreate response:', response)
       routes.value.push(response)
       return response
