@@ -14,6 +14,7 @@ declare module 'vue' {
     CreateBoulderDialog: typeof import('./src/components/route/CreateBoulderDialog.vue')['default']
     Dialog: typeof import('primevue/dialog')['default']
     DifficultyTag: typeof import('./src/components/route/DifficultyTag.vue')['default']
+    Dropdown: typeof import('primevue/dropdown')['default']
     RouteEdit: typeof import('./src/components/route/RouteEdit.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
