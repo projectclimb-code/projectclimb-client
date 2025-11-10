@@ -21,6 +21,7 @@ declare module 'vue' {
     RouterView: typeof import('vue-router')['RouterView']
     RouteView: typeof import('./src/components/route/RouteView.vue')['default']
     SideMenu: typeof import('./src/components/navigation/SideMenu.vue')['default']
+    ZoomControls: typeof import('./src/components/route/ZoomControls.vue')['default']
   }
   export interface GlobalDirectives {
     Tooltip: typeof import('primevue/tooltip')['default']
