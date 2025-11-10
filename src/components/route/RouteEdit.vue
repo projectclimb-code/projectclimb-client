@@ -235,6 +235,27 @@ function handleEditInfo() {
   })
 }
 
+function flipId(id: string): string {
+  const numId = parseInt(id, 10)
+  
+  if (isNaN(numId)) {
+    return id // Return as-is if not a number
+  }
+  
+  // Left side (0-99, up to 100) -> Right side (100-199)
+  if (numId >= 0 && numId < 100) {
+    return String(numId + 100)
+  }
+  // Right side (100-199, from 100 to 200) -> Left side (0-99)
+  else if (numId >= 100 && numId < 200) {
+    return String(numId - 100)
+  }
+  // Middle elements (>= 200) stay the same
+  else {
+    return id
+  }
+}
+
 function handleFlip() {
   confirm.require({
     message: 'Are you sure you want to flip your selections?',
@@ -250,8 +271,33 @@ function handleFlip() {
       severity: 'warning'
     },
     accept: () => {
-      // TODO: Implement flip functionality
-      console.log('Flip confirmed')
+      // Flip start holds
+      selectedStarts.value = selectedStarts.value.map(id => flipId(id))
+      
+      // Flip end hold
+      if (selectedEnd.value) {
+        selectedEnd.value = flipId(selectedEnd.value)
+      }
+      
+      // Flip normal holds
+      const flippedNormal = new Set<string>()
+      selectedNormalPositions.value.forEach(id => {
+        flippedNormal.add(flipId(id))
+      })
+      selectedNormalPositions.value = flippedNormal
+      
+      // Update the visual representation
+      updatePathColors()
+      
+      // Preview the flipped route
+      preview()
+      
+      toast.add({
+        severity: 'success',
+        summary: 'Success',
+        detail: 'Selections flipped successfully',
+        life: 3000
+      })
     }
   })
 }
