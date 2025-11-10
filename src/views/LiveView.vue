@@ -94,6 +94,13 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   stopCamera()
+  if (cameraFeedRef.value) {
+    const videoElement = cameraFeedRef.value.video
+    if (videoElement) {
+      videoElement.pause()
+      videoElement.srcObject = null
+    }
+  }
 })
 
 function handleCameraReady(videoElement: HTMLVideoElement, pose: Pose) {

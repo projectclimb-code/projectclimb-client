@@ -58,7 +58,21 @@ function handlePoseReady(pose: Pose) {
 
 onBeforeUnmount(() => {
   if (cameraInstance) {
-    cameraInstance.stop()
+    try {
+      cameraInstance.stop()
+      cameraInstance = null
+    } catch (err) {
+      console.warn('Error stopping MediaPipe Camera:', err)
+    }
+  }
+  
+  if (video.value) {
+    video.value.pause()
+    if (video.value.srcObject) {
+      const stream = video.value.srcObject as MediaStream
+      stream.getTracks().forEach(track => track.stop())
+      video.value.srcObject = null
+    }
   }
 })
 
