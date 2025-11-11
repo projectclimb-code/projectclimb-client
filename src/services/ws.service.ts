@@ -43,6 +43,8 @@ export class WebSocketService {
     }
   }
 
+  // { type: "video", action: "replay", videoid: "67"}
+
   send(data: unknown): void {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify(data))
