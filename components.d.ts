@@ -10,17 +10,18 @@ declare module 'vue' {
   export interface GlobalComponents {
     ActionButtons: typeof import('./src/components/route/ActionButtons.vue')['default']
     BottomMenu: typeof import('./src/components/navigation/BottomMenu.vue')['default']
-    Button: typeof import('primevue/button')['default']
+    CameraControls: typeof import('./src/components/live/CameraControls.vue')['default']
+    CameraFeed: typeof import('./src/components/live/CameraFeed.vue')['default']
     CancelDialog: typeof import('./src/components/route/CancelDialog.vue')['default']
     CreateBoulderDialog: typeof import('./src/components/route/CreateBoulderDialog.vue')['default']
-    Dialog: typeof import('primevue/dialog')['default']
     DifficultyTag: typeof import('./src/components/route/DifficultyTag.vue')['default']
-    Dropdown: typeof import('primevue/dropdown')['default']
+    PoseTracker: typeof import('./src/components/live/PoseTracker.vue')['default']
     RouteEdit: typeof import('./src/components/route/RouteEdit.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     RouteView: typeof import('./src/components/route/RouteView.vue')['default']
     SideMenu: typeof import('./src/components/navigation/SideMenu.vue')['default']
+    ZoomControls: typeof import('./src/components/route/ZoomControls.vue')['default']
   }
   export interface GlobalDirectives {
     Tooltip: typeof import('primevue/tooltip')['default']

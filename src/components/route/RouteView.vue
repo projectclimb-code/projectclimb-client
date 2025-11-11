@@ -1,16 +1,27 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, nextTick, onActivated } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick, onActivated, watch } from 'vue'
 import plywood from '@/assets/images/plywood.jpg'
 import Button from 'primevue/button'
+import Dialog from 'primevue/dialog'
 import DifficultyTag from './DifficultyTag.vue'
 import { useRouter } from 'vue-router'
+import { loadWallSvg, scaleLayer } from '@/wall/wall'
+import { HoldType } from '@/interfaces/interfaces'
 
 const box = ref<HTMLElement | null>(null)
+const innerbox = ref<HTMLElement | null>(null)
 const isWide = ref(false)
 const ratio = ref(1)
 const visible = ref(false)
 const router = useRouter()
 const routesStore = useRoutesStore()
+
+const configKonva = ref({
+  width: 200,
+  height: 200,
+})
+const stage = ref<any>(null)
+const mainLayer = ref<any>(null)
 
 let observer: ResizeObserver | null = null
 import type { Route } from '@/interfaces/interfaces'
@@ -21,7 +32,9 @@ const props = defineProps<{
   route: Route
 }>()
 
-onMounted(() => {
+onMounted(async () => {
+  await nextTick()
+  
   if (box.value) {
     observer = new ResizeObserver((entries) => {
       const entry = entries[0]
@@ -32,8 +45,15 @@ onMounted(() => {
           isWide.value = width / height > 0.78
         }
       }
+      // Update Konva stage size
+      if (innerbox.value && stage.value) {
+        updateKonvaSize()
+      }
     })
     observer.observe(box.value)
+    if (innerbox.value) {
+      observer.observe(innerbox.value)
+    }
     
     // Force initial calculation
     nextTick(() => {
@@ -46,6 +66,13 @@ onMounted(() => {
       }
     })
   }
+  
+  // Initialize Konva after a short delay to ensure DOM is ready
+  setTimeout(() => {
+    if (stage.value) {
+      initKonva()
+    }
+  }, 100)
 })
 
 onActivated(async () => {
@@ -57,6 +84,14 @@ onActivated(async () => {
       ratio.value = rect.width / rect.height
       isWide.value = rect.width / rect.height > 0.78
     }
+  }
+  // Re-initialize Konva if needed
+  if (stage.value && !mainLayer.value) {
+    setTimeout(() => {
+      initKonva()
+    }, 100)
+  } else if (mainLayer.value) {
+    updatePathColors()
   }
 })
 
@@ -82,6 +117,94 @@ function deleteRoute() {
   }
 }
 
+function updateKonvaSize() {
+  if (!innerbox.value || !stage.value) return
+  
+  const container = innerbox.value as HTMLElement
+  const containerWidth = container.clientWidth
+  const containerHeight = container.clientHeight
+  
+  if (containerWidth > 0 && containerHeight > 0) {
+    configKonva.value.width = containerWidth
+    configKonva.value.height = containerHeight
+    
+    if (mainLayer.value) {
+      const konvaStage = stage.value.getNode()
+      scaleLayer(mainLayer.value, konvaStage)
+      konvaStage.draw()
+    }
+  }
+}
+
+function updatePathColors() {
+  if (!mainLayer.value || !stage.value) return
+  
+  const konvaStage = stage.value.getNode()
+  const children = mainLayer.value.children
+  if (!children) return
+  
+  // Extract hold IDs from route data
+  const routeHolds = props.route.data?.problem?.holds || []
+  const startHolds = routeHolds.filter(h => h.type === HoldType.start).map(h => h.id)
+  const endHolds = routeHolds.filter(h => h.type === HoldType.finish).map(h => h.id)
+  const normalHolds = routeHolds.filter(h => h.type === HoldType.normal).map(h => h.id)
+  
+  children.forEach((node: any) => {
+    const pathId = node.id()
+    const isStart = startHolds.includes(pathId)
+    const isEnd = endHolds.includes(pathId)
+    const isNormal = normalHolds.includes(pathId)
+    
+    if (isStart) {
+      node.fill('green')
+      node.opacity(1)
+    } else if (isEnd) {
+      node.fill('red')
+      node.opacity(1)
+    } else if (isNormal) {
+      node.fill('white')
+      node.opacity(1)
+    } else {
+      node.fill('white')
+      node.opacity(0.3)
+    }
+  })
+  
+  konvaStage.draw()
+}
+
+async function initKonva() {
+  if (!stage.value) return
+  
+  const konvaStage = stage.value.getNode()
+  
+  // Load wall SVG without click handlers (read-only)
+  mainLayer.value = await loadWallSvg(undefined, [], null)
+  
+  // Remove all event listeners to make it read-only
+  const children = mainLayer.value.children
+  if (children) {
+    children.forEach((node: any) => {
+      node.off('tap')
+      node.off('click')
+      node.listening(false)
+    })
+  }
+  
+  updateKonvaSize()
+  scaleLayer(mainLayer.value, konvaStage)
+  konvaStage.add(mainLayer.value)
+  updatePathColors()
+  konvaStage.draw()
+}
+
+// Watch for route changes to update colors
+watch(() => props.route.data?.problem?.holds, () => {
+  if (mainLayer.value) {
+    updatePathColors()
+  }
+}, { deep: true })
+
 </script>
 <template>
   <div ref="box" class="flex items-center justify-center relative w-full h-full min-h-0">
@@ -100,13 +223,16 @@ function deleteRoute() {
         style="box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px; position: relative; width: 100%; height: 100%;"
       >
         <div
-          class="relative bg-cover bg-center m-[4px] rounded-[12px] pt-5 flex items-center justify-center overflow-hidden"
-          :style="{ backgroundImage: `url(${plywood})`, minHeight: 0 }"
+          ref="innerbox"
+          class="relative bg-cover bg-center m-[4px] rounded-[12px] flex items-center justify-center overflow-hidden"
+          :style="{ backgroundImage: `url(${plywood})`, minHeight: 0, position: 'relative', width: '100%', height: '100%' }"
         >
-          <!-- <div class="e absolute w-full h-full flex items-center justify-center pb-4">
-            <button class="bg-[#4095f2] text-white text-sm rounded-lg px-4">Climb</button>
-          </div> -->
-          <img src="@/assets/images/wall.svg" class="w-full h-auto object-contain max-h-full" style="max-width: 100%;" />
+          <v-stage
+            ref="stage"
+            :config="configKonva"
+            class="touch-none"
+            style="width: 100%; height: 100%; position: absolute; top: 0; left: 0;"
+          ></v-stage>
         </div>
         <div class="absolute top-2 left-2 right-2 flex items-center gap-2 z-10 pointer-events-none">
           <div

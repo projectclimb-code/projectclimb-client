@@ -38,6 +38,14 @@
       ></v-stage>
     </div>
     
+    <ZoomControls
+      :is-pan-mode="isPanMode"
+      @zoom-in="handleZoomIn"
+      @zoom-out="handleZoomOut"
+      @reset="handleReset"
+      @toggle-pan="togglePanMode"
+    />
+    
     <!-- Route name and grade display -->
     <div
       v-if="currentRoute && !isSessionRoute"
@@ -63,6 +71,7 @@ import { useRoute, useRouter } from 'vue-router'
 import plywood from '@/assets/images/plywood.jpg'
 import ActionButtons from './ActionButtons.vue'
 import DifficultyTag from './DifficultyTag.vue'
+import ZoomControls from './ZoomControls.vue'
 import { useRoutesStore } from '@/stores/routes'
 import type { Route, Hold } from '@/interfaces/interfaces.ts'
 import { HoldType } from '@/interfaces/interfaces.ts'
@@ -92,6 +101,7 @@ const isLandscape = ref(false)
 const configKonva = ref({
   width: 200,
   height: 200,
+  draggable: false,
 })
 const stage = ref<any>(null)
 const mainLayer = ref<any>(null)
@@ -101,6 +111,17 @@ const selectedStarts = ref<string[]>([])
 const selectedEnd = ref<string | null>(null)
 const selectedNormalPositions = ref<Set<string>>(new Set())
 const currentRoute = ref<Route | null>(null)
+
+// Pan and zoom state
+const zoomScale = ref(1) // User zoom multiplier (starts at 1)
+const baseScale = ref(1) // Base scale from scaleLayer
+const basePosition = ref({ x: 0, y: 0 }) // Base position from scaleLayer
+const panOffset = ref({ x: 0, y: 0 }) // User pan offset
+const isPanMode = ref(false)
+const isDragging = ref(false)
+const lastPointerPosition = ref({ x: 0, y: 0 })
+const minZoom = 0.5
+const maxZoom = 3
 
 let observer: ResizeObserver | null = null
 
@@ -202,14 +223,15 @@ function handleEditInfo() {
     },
     onClose: async (result) => {
       const data = result?.data
-      if (data && data.name && data.grade && data.isEdit && currentRoute.value) {
+      if (data && data.name && data.grade && data.author && data.isEdit && currentRoute.value) {
         try {
           const updatedRoute: Route = {
             ...currentRoute.value,
             name: data.name,
             data: {
               ...currentRoute.value.data,
-              grade: data.grade
+              grade: data.grade,
+              author: data.author
             }
           }
           await routesStore.saveRoute(updatedRoute)
@@ -234,6 +256,27 @@ function handleEditInfo() {
   })
 }
 
+function flipId(id: string): string {
+  const numId = parseInt(id, 10)
+  
+  if (isNaN(numId)) {
+    return id // Return as-is if not a number
+  }
+  
+  // Left side (0-99, up to 100) -> Right side (100-199)
+  if (numId >= 0 && numId < 100) {
+    return String(numId + 100)
+  }
+  // Right side (100-199, from 100 to 200) -> Left side (0-99)
+  else if (numId >= 100 && numId < 200) {
+    return String(numId - 100)
+  }
+  // Middle elements (>= 200) stay the same
+  else {
+    return id
+  }
+}
+
 function handleFlip() {
   confirm.require({
     message: 'Are you sure you want to flip your selections?',
@@ -249,8 +292,33 @@ function handleFlip() {
       severity: 'warning'
     },
     accept: () => {
-      // TODO: Implement flip functionality
-      console.log('Flip confirmed')
+      // Flip start holds
+      selectedStarts.value = selectedStarts.value.map(id => flipId(id))
+      
+      // Flip end hold
+      if (selectedEnd.value) {
+        selectedEnd.value = flipId(selectedEnd.value)
+      }
+      
+      // Flip normal holds
+      const flippedNormal = new Set<string>()
+      selectedNormalPositions.value.forEach(id => {
+        flippedNormal.add(flipId(id))
+      })
+      selectedNormalPositions.value = flippedNormal
+      
+      // Update the visual representation
+      updatePathColors()
+      
+      // Preview the flipped route
+      preview()
+      
+      toast.add({
+        severity: 'success',
+        summary: 'Success',
+        detail: 'Selections flipped successfully',
+        life: 3000
+      })
     }
   })
 }
@@ -280,23 +348,11 @@ function preview() {
 function activateStartMode() {
   startMode.value = true
   endMode.value = false
-  toast.add({
-    severity: 'info',
-    summary: 'Start',
-    detail: 'Select two elements to start',
-    life: 3000
-  })
 }
 
 function activateEndMode() {
   endMode.value = true
   startMode.value = false
-  toast.add({
-    severity: 'info',
-    summary: 'End',
-    detail: 'Select one end element',
-    life: 3000
-  })
 }
 
 function isWideScreen(width?: number, height?: number) {
@@ -339,6 +395,16 @@ function isWideScreen(width?: number, height?: number) {
   if (stage.value && mainLayer.value) {
     const konvaStage = stage.value.getNode()
     scaleLayer(mainLayer.value, konvaStage)
+    
+    // Update base scale and position after resize
+    baseScale.value = mainLayer.value.scaleX()
+    basePosition.value = {
+      x: mainLayer.value.x(),
+      y: mainLayer.value.y(),
+    }
+    
+    // Reapply transform with new base values
+    applyTransform()
     konvaStage.draw()
   }
 }
@@ -519,6 +585,131 @@ function updatePathColors() {
   konvaStage.draw()
 }
 
+// Pan and zoom functions
+function applyTransform() {
+  if (!mainLayer.value || !stage.value) return
+  
+  const konvaStage = stage.value.getNode()
+  // Apply base scale * zoom scale
+  const finalScale = baseScale.value * zoomScale.value
+  mainLayer.value.scale({ x: finalScale, y: finalScale })
+  
+  // Apply base position + pan offset
+  mainLayer.value.position({
+    x: basePosition.value.x + panOffset.value.x,
+    y: basePosition.value.y + panOffset.value.y,
+  })
+  konvaStage.draw()
+}
+
+function handleZoomIn() {
+  zoomScale.value = Math.min(zoomScale.value * 1.2, maxZoom)
+  applyTransform()
+}
+
+function handleZoomOut() {
+  zoomScale.value = Math.max(zoomScale.value / 1.2, minZoom)
+  applyTransform()
+}
+
+function handleReset() {
+  zoomScale.value = 1
+  panOffset.value = { x: 0, y: 0 }
+  applyTransform()
+}
+
+function togglePanMode() {
+  isPanMode.value = !isPanMode.value
+  if (stage.value) {
+    const konvaStage = stage.value.getNode()
+    konvaStage.draggable(isPanMode.value)
+    konvaStage.draw()
+  }
+}
+
+function handleWheel(e: WheelEvent) {
+  e.preventDefault()
+  if (!stage.value || !mainLayer.value) return
+  
+  const konvaStage = stage.value.getNode()
+  const stageBox = konvaStage.container().getBoundingClientRect()
+  const pointer = {
+    x: e.clientX - stageBox.left,
+    y: e.clientY - stageBox.top,
+  }
+  
+  const oldZoom = zoomScale.value
+  const delta = e.deltaY > 0 ? 0.9 : 1.1
+  zoomScale.value = Math.max(minZoom, Math.min(zoomScale.value * delta, maxZoom))
+  
+  // Calculate zoom point in layer coordinates
+  const layerPoint = {
+    x: (pointer.x - basePosition.value.x - panOffset.value.x) / (baseScale.value * oldZoom),
+    y: (pointer.y - basePosition.value.y - panOffset.value.y) / (baseScale.value * oldZoom),
+  }
+  
+  // Adjust pan offset to keep the zoom point under the mouse
+  panOffset.value = {
+    x: pointer.x - layerPoint.x * (baseScale.value * zoomScale.value) - basePosition.value.x,
+    y: pointer.y - layerPoint.y * (baseScale.value * zoomScale.value) - basePosition.value.y,
+  }
+  
+  applyTransform()
+}
+
+function handleMouseDown(e: MouseEvent) {
+  if (!isPanMode.value || !stage.value) return
+  
+  // Only pan with left mouse button
+  if (e.button !== 0) return
+  
+  // Check if clicking on a path - if so, don't pan
+  const konvaStage = stage.value.getNode()
+  const pointer = konvaStage.getPointerPosition()
+  if (!pointer) return
+  
+  const clickedOnShape = konvaStage.getIntersection(pointer)
+  if (clickedOnShape && clickedOnShape !== konvaStage) {
+    // Clicked on a shape, let the normal click handler work
+    return
+  }
+  
+  isDragging.value = true
+  const stageBox = konvaStage.container().getBoundingClientRect()
+  lastPointerPosition.value = {
+    x: e.clientX - stageBox.left,
+    y: e.clientY - stageBox.top,
+  }
+  e.preventDefault()
+}
+
+function handleMouseMove(e: MouseEvent) {
+  if (!isPanMode.value || !isDragging.value || !stage.value) return
+  
+  const konvaStage = stage.value.getNode()
+  const stageBox = konvaStage.container().getBoundingClientRect()
+  const newPointerPosition = {
+    x: e.clientX - stageBox.left,
+    y: e.clientY - stageBox.top,
+  }
+  
+  const dx = newPointerPosition.x - lastPointerPosition.value.x
+  const dy = newPointerPosition.y - lastPointerPosition.value.y
+  
+  panOffset.value = {
+    x: panOffset.value.x + dx,
+    y: panOffset.value.y + dy,
+  }
+  
+  lastPointerPosition.value = newPointerPosition
+  applyTransform()
+  e.preventDefault()
+}
+
+function handleMouseUp() {
+  isDragging.value = false
+}
+
 async function initKonva() {
   const konvaStage = stage.value.getNode()
   mainLayer.value = await loadWallSvg(
@@ -527,8 +718,25 @@ async function initKonva() {
     selectedEnd.value
   )
   scaleLayer(mainLayer.value, konvaStage)
+  
+  // Store base scale and position after scaleLayer
+  baseScale.value = mainLayer.value.scaleX()
+  basePosition.value = {
+    x: mainLayer.value.x(),
+    y: mainLayer.value.y(),
+  }
+  
   konvaStage.add(mainLayer.value)
+  applyTransform()
   konvaStage.draw()
+  
+  // Attach event listeners to the stage container
+  const container = konvaStage.container()
+  container.addEventListener('wheel', handleWheel, { passive: false })
+  container.addEventListener('mousedown', handleMouseDown)
+  container.addEventListener('mousemove', handleMouseMove)
+  container.addEventListener('mouseup', handleMouseUp)
+  container.addEventListener('mouseleave', handleMouseUp)
 }
 </script>
 
