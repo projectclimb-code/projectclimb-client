@@ -160,7 +160,7 @@ function createRoute() {
   min-height: 0;
   display: flex;
   align-items: stretch;
-  aspect-ratio: 0.78;
+  aspect-ratio: 0.85;
 }
 
 .route-view-item > * {
@@ -239,6 +239,15 @@ function createRoute() {
 
   .empty-message {
     font-size: 1.1rem;
+  }
+  
+  .route-view-item {
+    aspect-ratio: 0.8;
+  }
+  
+  .grid {
+    gap: 1rem !important;
+    padding: 1rem !important;
   }
 }
 </style>

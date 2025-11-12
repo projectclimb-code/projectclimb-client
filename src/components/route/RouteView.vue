@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, nextTick, onActivated, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, onActivated, watch } from 'vue'
 import plywood from '@/assets/images/plywood.jpg'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import DifficultyTag from './DifficultyTag.vue'
 import { useRouter } from 'vue-router'
 import { loadWallSvg, scaleLayer } from '@/wall/wall'
+import { constants } from '@/utils/constants'
 import { HoldType } from '@/interfaces/interfaces'
 import { useToast } from 'primevue/usetoast'
+import { useVideoPlayer } from '@/composables/useVideoPlayer'
 
 const box = ref<HTMLElement | null>(null)
 const innerbox = ref<HTMLElement | null>(null)
@@ -15,9 +17,18 @@ const isWide = ref(false)
 const ratio = ref(1)
 const visible = ref(false)
 const isHighlighted = ref(false)
+const isPlaying = ref(false)
 const router = useRouter()
 const routesStore = useRoutesStore()
 const toast = useToast()
+const videoRef = ref<HTMLVideoElement | null>(null)
+const { setActiveVideo, clearActiveVideo, isActiveVideo } = useVideoPlayer()
+const videoStyle = ref({
+  top: '5%',
+  left: '0',
+  width: '100%',
+  height: '100%',
+})
 
 const configKonva = ref({
   width: 200,
@@ -34,6 +45,27 @@ import { useRoutesStore } from '@/stores/routes'
 const props = defineProps<{
   route: Route
 }>()
+
+// List of available video IDs
+const availableVideoIds = [69, 75, 76, 77, 78, 79, 80]
+
+const hasVideo = computed(() => {
+  if (!props.route.id) return false
+  return availableVideoIds.includes(props.route.id)
+})
+
+const videoSrc = computed(() => {
+  if (!hasVideo.value || !props.route.id) return null
+  return `/videos/${props.route.id}.webm`
+})
+
+function onVideoError(event: Event) {
+  console.warn(`Video not found for route ID ${props.route.id}:`, videoSrc.value)
+}
+
+function onVideoLoaded() {
+  // Video loaded successfully
+}
 
 onMounted(async () => {
   await nextTick()
@@ -100,6 +132,13 @@ onActivated(async () => {
 
 onBeforeUnmount(() => {
   if (observer) observer.disconnect()
+  if (videoRef.value) {
+    videoRef.value.pause()
+    if (isActiveVideo(props.route.id)) {
+      clearActiveVideo()
+    }
+    videoRef.value = null
+  }
 })
 
 function editRoute(path: string) {
@@ -115,6 +154,36 @@ function preview() {
   
   if (props.route.id) {
     router.push({ path: '/session', query: { id: props.route.id } })
+  }
+}
+
+async function toggleVideo(event: Event) {
+  event.stopPropagation()
+  if (!videoRef.value || !props.route.id) {
+    console.warn('Video ref or route ID not available')
+    return
+  }
+  
+  try {
+    if (isPlaying.value) {
+      videoRef.value.pause()
+      isPlaying.value = false
+      clearActiveVideo()
+    } else {
+      // Set this as the active video (will pause others)
+      setActiveVideo(props.route.id, videoRef.value)
+      await videoRef.value.play()
+      isPlaying.value = true
+    }
+  } catch (error) {
+    console.error('Error toggling video:', error)
+  }
+}
+
+function onVideoEnded() {
+  isPlaying.value = false
+  if (isActiveVideo(props.route.id)) {
+    clearActiveVideo()
   }
 }
 
@@ -215,6 +284,17 @@ function updateKonvaSize() {
     if (mainLayer.value) {
       const konvaStage = stage.value.getNode()
       scaleLayer(mainLayer.value, konvaStage)
+      
+      // SVG is already scaled by scaleLayer to fit - no additional scaling needed
+      
+      // Update video style to match Konva stage exactly
+      videoStyle.value = {
+        top: '5%',
+        left: '0',
+        width: '100%',
+        height: '100%',
+      }
+      
       konvaStage.draw()
     }
   }
@@ -281,6 +361,9 @@ async function initKonva() {
   
   updateKonvaSize()
   scaleLayer(mainLayer.value, konvaStage)
+  
+  // SVG is already scaled by scaleLayer to fit - no additional scaling needed
+  
   konvaStage.add(mainLayer.value)
   updatePathColors()
   konvaStage.draw()
@@ -310,8 +393,8 @@ watch(() => props.route.data?.problem?.holds, () => {
       >
         <div
           ref="innerbox"
-          class="relative bg-cover bg-center m-[4px] rounded-[12px] flex items-center justify-center overflow-hidden pointer-events-none"
-          :style="{ backgroundImage: `url(${plywood})`, minHeight: 0, position: 'relative', width: '97%', height: '100%' }"
+          class="relative bg-cover bg-center m-[4px] rounded-[12px] flex items-center justify-center overflow-hidden"
+          :style="{ backgroundImage: `url(${plywood})`, minHeight: 0, position: 'relative', width: '97%', height: '100%', pointerEvents: 'none' }"
         >
           <v-stage
             ref="stage"
@@ -319,6 +402,33 @@ watch(() => props.route.data?.problem?.holds, () => {
             class="touch-none"
             style="width: 100%; height: 100%; position: absolute; top: 5%; left: 0; pointer-events: none;"
           ></v-stage>
+          <video
+            v-if="hasVideo && videoSrc"
+            ref="videoRef"
+            :src="videoSrc"
+            class="absolute"
+            :style="{ opacity: 0.5, zIndex: 2, pointerEvents: 'none', ...videoStyle, objectFit: 'contain' }"
+            @ended="onVideoEnded"
+            @error="onVideoError"
+            @loadeddata="onVideoLoaded"
+            @canplay="onVideoLoaded"
+            loop
+            muted
+            playsinline
+            preload="auto"
+          ></video>
+          <button
+            v-if="hasVideo && videoSrc"
+            @click.stop="toggleVideo"
+            class="absolute pointer-events-auto bg-black bg-opacity-50 hover:bg-opacity-70 transition-all rounded-full flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14"
+            style="top: calc(5% + 50%); left: 50%; transform: translate(-50%, -50%); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6); z-index: 15;"
+          >
+            <span
+              :class="isPlaying ? 'pi pi-pause' : 'pi pi-play'"
+              class="text-white text-lg sm:text-xl"
+              :style="isPlaying ? '' : 'margin-left: 2px;'"
+            ></span>
+          </button>
         </div>
         <div class="absolute top-2 left-2 right-2 flex items-center gap-2 z-10 pointer-events-none">
           <div
@@ -329,10 +439,9 @@ watch(() => props.route.data?.problem?.holds, () => {
           </div>
           <DifficultyTag :grade="props.route.data.grade" class="flex-shrink-0"></DifficultyTag>
         </div>
-        <div class="absolute bottom-2 left-2 right-2 flex justify-between items-center z-10 pointer-events-none">
-          
+        <div class="absolute bottom-2 left-2 right-2 flex justify-between items-center pointer-events-none" style="z-index: 30;">
           <button
-            class="flex justify-center items-center bg-[#ED6A5A] text-white h-[36px] w-[36px] sm:h-[40px] sm:w-[40px] rounded-full p-2 flex-shrink-0 pointer-events-auto"
+            class="flex justify-center items-center bg-[#ED6A5A] text-white h-[36px] w-[36px] sm:h-[40px] sm:w-[40px] rounded-full p-2 flex-shrink-0 pointer-events-auto route-action-button"
             style="
               box-shadow:
                 rgba(50, 50, 93, 0.25) 0px 13px 27px -5px,
@@ -349,7 +458,7 @@ watch(() => props.route.data?.problem?.holds, () => {
           </button>
           <div class="flex items-center pointer-events-none" style="gap: 4%; margin-right: 0.5rem;">
             <button
-              class="flex justify-center items-center border bg-white border-primary text-white h-[28px] w-[28px] sm:h-[32px] sm:w-[32px] p-1.5 sm:p-2 rounded-full flex-shrink-0 pointer-events-auto"
+              class="flex justify-center items-center border bg-white border-primary text-white h-[28px] w-[28px] sm:h-[32px] sm:w-[32px] p-1.5 sm:p-2 rounded-full flex-shrink-0 pointer-events-auto route-action-button"
               style="
                 box-shadow:
                   rgba(50, 50, 93, 0.25) 0px 13px 27px -5px,
@@ -363,7 +472,7 @@ watch(() => props.route.data?.problem?.holds, () => {
               ></span>
             </button>
             <button
-              class="flex justify-center items-center border bg-white border-primary text-white h-[28px] w-[28px] sm:h-[32px] sm:w-[32px] p-1.5 sm:p-2 rounded-full flex-shrink-0 pointer-events-auto"
+              class="flex justify-center items-center border bg-white border-primary text-white h-[28px] w-[28px] sm:h-[32px] sm:w-[32px] p-1.5 sm:p-2 rounded-full flex-shrink-0 pointer-events-auto route-action-button"
               style="
                 box-shadow:
                   rgba(50, 50, 93, 0.25) 0px 13px 27px -5px,
@@ -377,7 +486,7 @@ watch(() => props.route.data?.problem?.holds, () => {
               ></span>
             </button>
             <button
-              class="flex justify-center items-center border bg-white border-primary text-white h-[28px] w-[28px] sm:h-[32px] sm:w-[32px] p-1.5 sm:p-2 rounded-full flex-shrink-0 pointer-events-auto"
+              class="flex justify-center items-center border bg-white border-primary text-white h-[28px] w-[28px] sm:h-[32px] sm:w-[32px] p-1.5 sm:p-2 rounded-full flex-shrink-0 pointer-events-auto route-action-button"
               style="
                 box-shadow:
                   rgba(50, 50, 93, 0.25) 0px 13px 27px -5px,
@@ -451,9 +560,41 @@ $primary-color: #000;
 }
 
 @media (max-width: 640px) {
-  .route-card > div:first-child {
-    padding-top: 5%;
+  .route-card {
+    width: 100% !important;
   }
+  
+  .route-card > div:first-child {
+    padding-top: 3%;
+  }
+  
+  .route-action-button {
+    transform: scale(1);
+  }
+  
+  .route-action-button:hover {
+    transform: scale(1.05);
+  }
+  
+  .route-action-button:active {
+    transform: scale(0.98);
+  }
+}
+
+.route-action-button {
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.route-action-button:hover {
+  transform: scale(1.1);
+  box-shadow:
+    rgba(50, 50, 93, 0.35) 0px 15px 35px -5px,
+    rgba(0, 0, 0, 0.4) 0px 10px 20px -8px !important;
+}
+
+.route-action-button:active {
+  transform: scale(0.95);
 }
 
 </style>
