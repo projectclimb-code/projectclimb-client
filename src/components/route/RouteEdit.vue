@@ -124,6 +124,7 @@ const minZoom = 0.5
 const maxZoom = 3
 
 let observer: ResizeObserver | null = null
+let flipToastTimeout: ReturnType<typeof setTimeout> | null = null
 
 async function handleSave() {
   console.log('handleSave called', { currentRoute: currentRoute.value })
@@ -138,6 +139,40 @@ async function handleSave() {
     })
     return
   }
+
+  // Check if route has no grade - show grade selection dialog
+  const hasGrade = currentRoute.value.data?.grade && currentRoute.value.data.grade.trim() !== ''
+  if (!hasGrade) {
+    dialog.open(CreateBoulderDialog, {
+      data: {
+        route: currentRoute.value,
+        selectGradeOnly: true
+      },
+      props: {
+        header: '',
+        style: { width: '90vw', maxWidth: '420px' },
+        modal: true,
+        dismissableMask: true,
+        closable: false,
+        closeOnEscape: true
+      },
+      onClose: async (result) => {
+        const data = result?.data
+        if (data && data.grade) {
+          // Update route with grade and save
+          await performSave(data.grade)
+        }
+      }
+    })
+    return
+  }
+
+  // Route has grade, proceed with normal save
+  await performSave()
+}
+
+async function performSave(grade?: string) {
+  if (!currentRoute.value || !currentRoute.value.id) return
 
   const holds: Hold[] = []
   
@@ -157,6 +192,7 @@ async function handleSave() {
     ...currentRoute.value,
     data: {
       ...currentRoute.value.data,
+      grade: grade || currentRoute.value.data?.grade,
       problem: {
         holds,
       },
@@ -167,6 +203,7 @@ async function handleSave() {
 
   try {
     await routesStore.saveRoute(updatedRoute)
+    currentRoute.value = updatedRoute
     console.log('Route saved successfully')
     toast.add({
       severity: 'success',
@@ -278,49 +315,43 @@ function flipId(id: string): string {
 }
 
 function handleFlip() {
-  confirm.require({
-    message: 'Are you sure you want to flip your selections?',
-    header: 'Flip Selections',
-    icon: 'pi pi-exclamation-triangle',
-    rejectProps: {
-      label: 'No',
-      severity: 'secondary',
-      outlined: true
-    },
-    acceptProps: {
-      label: 'Yes',
-      severity: 'warning'
-    },
-    accept: () => {
-      // Flip start holds
-      selectedStarts.value = selectedStarts.value.map(id => flipId(id))
-      
-      // Flip end hold
-      if (selectedEnd.value) {
-        selectedEnd.value = flipId(selectedEnd.value)
-      }
-      
-      // Flip normal holds
-      const flippedNormal = new Set<string>()
-      selectedNormalPositions.value.forEach(id => {
-        flippedNormal.add(flipId(id))
-      })
-      selectedNormalPositions.value = flippedNormal
-      
-      // Update the visual representation
-      updatePathColors()
-      
-      // Preview the flipped route
-      preview()
-      
-      toast.add({
-        severity: 'success',
-        summary: 'Success',
-        detail: 'Selections flipped successfully',
-        life: 3000
-      })
-    }
+  // Flip start holds
+  selectedStarts.value = selectedStarts.value.map(id => flipId(id))
+  
+  // Flip end hold
+  if (selectedEnd.value) {
+    selectedEnd.value = flipId(selectedEnd.value)
+  }
+  
+  // Flip normal holds
+  const flippedNormal = new Set<string>()
+  selectedNormalPositions.value.forEach(id => {
+    flippedNormal.add(flipId(id))
   })
+  selectedNormalPositions.value = flippedNormal
+  
+  // Update the visual representation
+  updatePathColors()
+  
+  // Preview the flipped route
+  preview()
+  
+  // Clear any pending toast notification
+  if (flipToastTimeout) {
+    clearTimeout(flipToastTimeout)
+  }
+  
+  // Debounce the toast notification
+  flipToastTimeout = setTimeout(() => {
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: 'Selections flipped successfully',
+      life: 3000,
+      group: 'flip'
+    })
+    flipToastTimeout = null
+  }, 300)
 }
 
 function preview() {
@@ -496,19 +527,27 @@ function handlePathClick(pathId: string) {
 function handleStartSelection(pathId: string) {
   const index = selectedStarts.value.indexOf(pathId)
   
+  // If clicking an already selected start, deselect it
   if (index > -1) {
     selectedStarts.value.splice(index, 1)
     updatePathColors()
     return
   }
   
-  if (selectedStarts.value.length < 2) {
+  // If no starts selected, add first start
+  if (selectedStarts.value.length === 0) {
     selectedStarts.value.push(pathId)
-  } else {
-    selectedStarts.value[0] = pathId
   }
-  
-  if (selectedStarts.value.length === 2) {
+  // If one start selected, add second start
+  else if (selectedStarts.value.length === 1) {
+    selectedStarts.value.push(pathId)
+    // Exit start mode after selecting the second start position
+    startMode.value = false
+  }
+  // If both starts selected, replace the last (second) one
+  else if (selectedStarts.value.length === 2) {
+    selectedStarts.value[1] = pathId
+    // Exit start mode after replacing
     startMode.value = false
   }
   
@@ -620,6 +659,7 @@ function handleReset() {
 
 function togglePanMode() {
   isPanMode.value = !isPanMode.value
+  isDragging.value = false
   if (stage.value) {
     const konvaStage = stage.value.getNode()
     konvaStage.draggable(isPanMode.value)
