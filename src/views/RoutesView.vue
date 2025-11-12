@@ -66,10 +66,10 @@ function createRoute() {
     onClose: async (result) => {
       console.log('Dialog onClose called with result:', result)
       const data = result?.data
-      if (data && data.name && data.grade && data.author) {
+      if (data && data.name && data.author) {
         console.log('Creating route with:', { name: data.name, grade: data.grade, author: data.author })
         try {
-          const newRoute = await routesStore.createRoute(data.name, data.grade, data.author)
+          const newRoute = await routesStore.createRoute(data.name, data.grade || '', data.author)
           console.log('Route created:', newRoute)
           routesStore.getRoutes()
           if (newRoute && newRoute.id) {
@@ -160,11 +160,14 @@ function createRoute() {
   min-height: 0;
   display: flex;
   align-items: stretch;
+  aspect-ratio: 0.78;
 }
 
 .route-view-item > * {
   width: 100%;
+  height: 100%;
   min-width: 0;
+  min-height: 0;
 }
 
 .empty-state {

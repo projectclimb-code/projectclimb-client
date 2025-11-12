@@ -7,6 +7,7 @@ import DifficultyTag from './DifficultyTag.vue'
 import { useRouter } from 'vue-router'
 import { loadWallSvg, scaleLayer } from '@/wall/wall'
 import { HoldType } from '@/interfaces/interfaces'
+import { useToast } from 'primevue/usetoast'
 
 const box = ref<HTMLElement | null>(null)
 const innerbox = ref<HTMLElement | null>(null)
@@ -15,6 +16,7 @@ const ratio = ref(1)
 const visible = ref(false)
 const router = useRouter()
 const routesStore = useRoutesStore()
+const toast = useToast()
 
 const configKonva = ref({
   width: 200,
@@ -24,6 +26,7 @@ const stage = ref<any>(null)
 const mainLayer = ref<any>(null)
 
 let observer: ResizeObserver | null = null
+let flipToastTimeout: ReturnType<typeof setTimeout> | null = null
 import type { Route } from '@/interfaces/interfaces'
 import { useRoutesStore } from '@/stores/routes'
 import { websocketService } from '@/services/ws.service'
@@ -117,6 +120,82 @@ function deleteRoute() {
   }
 }
 
+function flipId(id: string): string {
+  const numId = parseInt(id, 10)
+  
+  if (isNaN(numId)) {
+    return id
+  }
+  
+  if (numId >= 0 && numId < 100) {
+    return String(numId + 100)
+  } else if (numId >= 100 && numId < 200) {
+    return String(numId - 100)
+  } else {
+    return id
+  }
+}
+
+async function flipRoute() {
+  if (!props.route.id || !props.route.data?.problem?.holds) {
+    return
+  }
+  
+  const flippedHolds = props.route.data.problem.holds.map(hold => ({
+    ...hold,
+    id: flipId(hold.id)
+  }))
+  
+  const flippedRoute: Route = {
+    ...props.route,
+    data: {
+      ...props.route.data,
+      problem: {
+        ...props.route.data.problem,
+        holds: flippedHolds
+      }
+    }
+  }
+  
+  try {
+    await routesStore.saveRoute(flippedRoute)
+    updatePathColors()
+    
+    // Clear any pending toast notification
+    if (flipToastTimeout) {
+      clearTimeout(flipToastTimeout)
+    }
+    
+    // Debounce the toast notification
+    flipToastTimeout = setTimeout(() => {
+      toast.add({
+        severity: 'success',
+        summary: 'Success',
+        detail: 'Route flipped successfully',
+        life: 3000,
+        group: 'flip'
+      })
+      flipToastTimeout = null
+    }, 300)
+  } catch (error) {
+    console.error('Failed to flip route:', error)
+    
+    // Clear any pending toast notification
+    if (flipToastTimeout) {
+      clearTimeout(flipToastTimeout)
+    }
+    
+    // Show error immediately (no debounce for errors)
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to flip route',
+      life: 3000,
+      group: 'flip'
+    })
+  }
+}
+
 function updateKonvaSize() {
   if (!innerbox.value || !stage.value) return
   
@@ -207,20 +286,17 @@ watch(() => props.route.data?.problem?.holds, () => {
 
 </script>
 <template>
-  <div ref="box" class="flex items-center justify-center relative w-full h-full min-h-0">
+  <div ref="box" class="flex items-center justify-center relative w-full h-full min-h-0" style="width: 100%; height: 100%;">
     <!-- aspect is width/height = 4/3 -> height/width = 0.75 -->
 
     <div
-      class="bg-cover bg-center aspect-[0.78] flex items-center justify-center"
-      :class="{
-        'h-full max-w-full': isWide,
-        'w-full max-h-full': !isWide,
-      }"
-      style="min-width: 0; min-height: 0;"
+      class="bg-cover bg-center flex items-center justify-center"
+      style="min-width: 0; min-height: 0; width: 100%; height: 100%;"
     >
       <div
-        class="overflow-hidden bg-white rounded-[16px] relative route-card"
+        class="overflow-hidden bg-white rounded-[16px] relative route-card cursor-pointer"
         style="box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px; position: relative; width: 100%; height: 100%;"
+        @click="preview()"
       >
         <div
           ref="innerbox"
@@ -252,7 +328,7 @@ watch(() => props.route.data?.problem?.holds, () => {
                 rgba(50, 50, 93, 0.25) 0px 13px 27px -5px,
                 rgba(0, 0, 0, 0.3) 0px 8px 16px -8px;
             "
-            @click="editRoute('/session')"
+            @click.stop="editRoute('/session')"
           >
             <div class="text-primary font-light flex items-center gap-1 text-xs">
               <img
@@ -268,10 +344,10 @@ watch(() => props.route.data?.problem?.holds, () => {
                 rgba(50, 50, 93, 0.25) 0px 13px 27px -5px,
                 rgba(0, 0, 0, 0.3) 0px 8px 16px -8px;
             "
-            @click="preview()"
+            @click.stop="editRoute('/edit')"
           >
             <span
-              class="pi pi-eye text-primary inline-block"
+              class="pi pi-pencil text-primary inline-block"
               style="font-size: 11px; font-weight: 100"
             ></span>
           </button>
@@ -282,21 +358,7 @@ watch(() => props.route.data?.problem?.holds, () => {
                 rgba(50, 50, 93, 0.25) 0px 13px 27px -5px,
                 rgba(0, 0, 0, 0.3) 0px 8px 16px -8px;
             "
-            @click="editRoute('/edit')"
-          >
-            <span
-              class="pi pi-file-edit text-primary inline-block"
-              style="font-size: 11px; font-weight: 100"
-            ></span>
-          </button>
-          <button
-            class="flex justify-center items-center border bg-white border-primary text-white h-[28px] w-[28px] sm:h-[32px] sm:w-[32px] p-1.5 sm:p-2 rounded-full flex-shrink-0 pointer-events-auto"
-            style="
-              box-shadow:
-                rgba(50, 50, 93, 0.25) 0px 13px 27px -5px,
-                rgba(0, 0, 0, 0.3) 0px 8px 16px -8px;
-            "
-            @click="preview()"
+            @click.stop="flipRoute()"
           >
             <span
               class="pi pi-arrow-right-arrow-left text-primary inline-block"
@@ -310,7 +372,7 @@ watch(() => props.route.data?.problem?.holds, () => {
                 rgba(50, 50, 93, 0.25) 0px 13px 27px -5px,
                 rgba(0, 0, 0, 0.3) 0px 8px 16px -8px;
             "
-            @click="visible = true"
+            @click.stop="visible = true"
           >
             <span
               class="pi pi-trash text-primary inline-block"
@@ -366,6 +428,12 @@ $primary-color: #000;
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+}
+
+@media (max-width: 640px) {
+  .route-card > div:first-child {
+    padding-top: 5%;
+  }
 }
 
 </style>
