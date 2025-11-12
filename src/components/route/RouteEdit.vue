@@ -66,6 +66,7 @@
 </template>
 <script lang="ts" setup>
 import { loadWallSvg, scaleLayer } from '@/wall/wall'
+import { constants } from '@/utils/constants'
 import { onBeforeUnmount, onMounted, ref, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import plywood from '@/assets/images/plywood.jpg'
@@ -625,12 +626,67 @@ function updatePathColors() {
 }
 
 // Pan and zoom functions
+function constrainPanOffset() {
+  if (!mainLayer.value || !stage.value) return
+  
+  const konvaStage = stage.value.getNode()
+  const stageWidth = konvaStage.width()
+  const stageHeight = konvaStage.height()
+  const finalScale = baseScale.value * zoomScale.value
+  
+  // Calculate the scaled SVG dimensions
+  const scaledWidth = constants.WALL_WIDTH_MM * finalScale
+  const scaledHeight = constants.WALL_HEIGHT_MM * finalScale
+  
+  // Calculate the layer's actual position (basePosition + panOffset)
+  const layerCenterX = basePosition.value.x + panOffset.value.x
+  const layerCenterY = basePosition.value.y + panOffset.value.y
+  
+  // Calculate the layer's bounds
+  const layerLeft = layerCenterX - scaledWidth / 2
+  const layerRight = layerCenterX + scaledWidth / 2
+  const layerTop = layerCenterY - scaledHeight / 2
+  const layerBottom = layerCenterY + scaledHeight / 2
+  
+  // Calculate min/max pan offsets to keep SVG visible
+  // Ensure at least 10% of the SVG is visible on each side
+  const minVisibleWidth = scaledWidth * 0.1
+  const minVisibleHeight = scaledHeight * 0.1
+  
+  // Calculate constraints based on layer bounds
+  // layerLeft = (basePosition.x + panOffset.x) - scaledWidth/2 >= -minVisibleWidth
+  // => panOffset.x >= -minVisibleWidth - basePosition.x + scaledWidth/2
+  const minPanX = -minVisibleWidth - basePosition.value.x + scaledWidth / 2
+  
+  // layerRight = (basePosition.x + panOffset.x) + scaledWidth/2 <= stageWidth + minVisibleWidth
+  // => panOffset.x <= stageWidth + minVisibleWidth - basePosition.x - scaledWidth/2
+  const maxPanX = stageWidth + minVisibleWidth - basePosition.value.x - scaledWidth / 2
+  
+  // layerTop = (basePosition.y + panOffset.y) - scaledHeight/2 >= -minVisibleHeight
+  // => panOffset.y >= -minVisibleHeight - basePosition.y + scaledHeight/2
+  const minPanY = -minVisibleHeight - basePosition.value.y + scaledHeight / 2
+  
+  // layerBottom = (basePosition.y + panOffset.y) + scaledHeight/2 <= stageHeight + minVisibleHeight
+  // => panOffset.y <= stageHeight + minVisibleHeight - basePosition.y - scaledHeight/2
+  const maxPanY = stageHeight + minVisibleHeight - basePosition.value.y - scaledHeight / 2
+  
+  // Clamp pan offset
+  panOffset.value = {
+    x: Math.max(minPanX, Math.min(maxPanX, panOffset.value.x)),
+    y: Math.max(minPanY, Math.min(maxPanY, panOffset.value.y)),
+  }
+}
+
 function applyTransform() {
   if (!mainLayer.value || !stage.value) return
   
   const konvaStage = stage.value.getNode()
   // Apply base scale * zoom scale
   const finalScale = baseScale.value * zoomScale.value
+  
+  // Constrain pan offset before applying
+  constrainPanOffset()
+  
   mainLayer.value.scale({ x: finalScale, y: finalScale })
   
   // Apply base position + pan offset
