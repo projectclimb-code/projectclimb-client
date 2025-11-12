@@ -22,10 +22,10 @@
       @click="$emit('reset')"
     />
     <Button
-      :icon="isPanMode ? 'pi pi-hand-paper' : 'pi pi-arrows-alt'"
+      icon="pi pi-arrows-alt"
       :severity="isPanMode ? 'info' : 'secondary'"
       rounded
-      :class="['control-button', { 'pan-active': isPanMode }]"
+      class="control-button"
       @click="$emit('toggle-pan')"
     />
   </div>
@@ -69,18 +69,13 @@ defineEmits<{
 .control-button {
   width: 2.5rem;
   height: 2.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   
   :deep(.p-button-icon) {
     font-size: 1rem;
   }
   
-  &.pan-active {
-    :deep(.p-button-icon) {
-      color: white !important;
-    }
+  :deep(.p-button-info .p-button-icon) {
+    color: white;
   }
 }
 
@@ -101,4 +96,5 @@ defineEmits<{
   }
 }
 </style>
+
 
