@@ -28,7 +28,7 @@ export async function loadWallSvg(
     const holdIdAttr = p.getAttribute('id') || ''
     const holdIdMatch = holdIdAttr.match(/hold_(\d+)/)
     const pathId = holdIdMatch ? holdIdMatch[1] : `${i}`
-    const isStart = selectedStarts.includes(pathId)
+    const isStart = selectedStarts.includes(pathId || '')
     const isEnd = selectedEnd === pathId
 
     // Apply color based on selection
@@ -60,23 +60,23 @@ export async function loadWallSvg(
     // Use a flag to prevent multiple rapid fires on mobile
     let lastClickTime = 0
     const CLICK_DEBOUNCE_MS = 300
-    
+
     const handleInteraction = (e?: any) => {
       // Prevent default touch behavior
       if (e && e.evt) {
         e.evt.preventDefault?.()
         e.evt.stopPropagation?.()
       }
-      
+
       const now = Date.now()
       // Debounce rapid clicks/taps
       if (now - lastClickTime < CLICK_DEBOUNCE_MS) {
         return
       }
       lastClickTime = now
-      
+
       if (onPathClick) {
-        onPathClick(pathId)
+        onPathClick(pathId || '')
       }
     }
 
@@ -107,11 +107,11 @@ export async function loadWallSvg(
 export function scaleLayer(layer: Konva.Layer, stage: Konva.Stage) {
   layer.offsetX(constants.WALL_WIDTH_MM / 2)
   layer.offsetY(constants.WALL_HEIGHT_MM / 2)
-  
+
   // Calculate uniform scale to fit the wall within the stage while maintaining aspect ratio
   const wallAspectRatio = constants.WALL_WIDTH_MM / constants.WALL_HEIGHT_MM
   const stageAspectRatio = stage.width() / stage.height()
-  
+
   // Use uniform scale based on the smaller dimension to ensure everything fits
   let scale: number
   if (stageAspectRatio > wallAspectRatio) {
@@ -121,7 +121,7 @@ export function scaleLayer(layer: Konva.Layer, stage: Konva.Stage) {
     // Stage is taller than wall - fit based on width
     scale = stage.width() / constants.WALL_WIDTH_MM
   }
-  
+
   layer.position({
     x: stage.width() / 2,
     y: stage.height() / 2,
