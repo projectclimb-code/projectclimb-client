@@ -55,6 +55,7 @@
     </div>
     
     <ZoomControls
+      v-if="!isSessionRoute"
       :is-pan-mode="isPanMode"
       @zoom-in="handleZoomIn"
       @zoom-out="handleZoomOut"
@@ -100,6 +101,38 @@ import CancelDialog from './CancelDialog.vue'
 import CreateBoulderDialog from './CreateBoulderDialog.vue'
 import { POSE_CONNECTIONS } from '@mediapipe/pose'
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils'
+
+// Custom pose connections to ensure arms connect correctly to shoulders, not torso center
+// MediaPipe Pose landmark indices:
+// 11: Left shoulder, 12: Right shoulder
+// 13: Left elbow, 14: Right elbow
+// 15: Left wrist, 16: Right wrist
+// 23: Left hip, 24: Right hip
+// We use the default POSE_CONNECTIONS but ensure arms connect properly
+// The issue was likely that arms were connecting to torso center instead of shoulders
+const CUSTOM_POSE_CONNECTIONS: [number, number][] = [
+  // Face connections (0-10) - keep all face connections from default
+  ...POSE_CONNECTIONS.filter((conn: [number, number]) => {
+    const [a, b] = conn
+    return a < 11 && b < 11
+  }),
+  // Torso: shoulders to hips (explicit connections)
+  [11, 23], // Left shoulder to left hip
+  [12, 24], // Right shoulder to right hip
+  [23, 24], // Left hip to right hip
+  [11, 12], // Left shoulder to right shoulder (across chest)
+  // Left arm: shoulder -> elbow -> wrist (explicit chain)
+  [11, 13], // Left shoulder to left elbow
+  [13, 15], // Left elbow to left wrist
+  // Right arm: shoulder -> elbow -> wrist (explicit chain)
+  [12, 14], // Right shoulder to right elbow
+  [14, 16], // Right elbow to right wrist
+  // Legs - keep all leg connections from default
+  ...POSE_CONNECTIONS.filter((conn: [number, number]) => {
+    const [a, b] = conn
+    return a >= 23 || b >= 23
+  }),
+]
 
 const route = useRoute()
 const router = useRouter()
@@ -1335,9 +1368,9 @@ function drawSkeleton(landmarks: any[]) {
   ctx.clearRect(0, 0, canvas.width, canvas.height)
   const clearTime = performance.now() - clearStartTime
   
-  // Draw pose connections using MediaPipe utilities
+  // Draw pose connections using custom connections to ensure arms connect correctly
   const drawConnectorsStartTime = performance.now()
-  drawConnectors(ctx, transformedLandmarks, POSE_CONNECTIONS, {
+  drawConnectors(ctx, transformedLandmarks, CUSTOM_POSE_CONNECTIONS, {
     color: '#00FF00',
     lineWidth: 4,
   })

@@ -172,7 +172,7 @@ function createRoute() {
   min-height: 0;
   display: flex;
   align-items: stretch;
-  aspect-ratio: 0.75;
+  aspect-ratio: 0.6;
 }
 
 .route-view-item > * {
@@ -254,7 +254,7 @@ function createRoute() {
   }
   
   .route-view-item {
-    aspect-ratio: 0.8;
+    aspect-ratio: 0.65;
   }
   
   .grid {

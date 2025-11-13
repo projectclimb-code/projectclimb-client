@@ -24,7 +24,7 @@ const toast = useToast()
 const videoRef = ref<HTMLVideoElement | null>(null)
 const { setActiveVideo, clearActiveVideo, isActiveVideo } = useVideoPlayer()
 const videoStyle = ref({
-  top: '5%',
+  top: '0',
   left: '0',
   width: '100%',
   height: '100%',
@@ -192,6 +192,13 @@ function onVideoEnded() {
   }
 }
 
+function onVideoPaused() {
+  // Update playing state when video is paused (including when paused by another video starting)
+  if (videoRef.value && videoRef.value.paused) {
+    isPlaying.value = false
+  }
+}
+
 function deleteRoute() {
   if (props.route.id) {
     routesStore.deleteRoute(props.route.id)
@@ -294,7 +301,7 @@ function updateKonvaSize() {
 
       // Update video style to match Konva stage exactly
       videoStyle.value = {
-        top: '5%',
+        top: '0',
         left: '0',
         width: '100%',
         height: '100%',
@@ -393,19 +400,19 @@ watch(() => props.route.data?.problem?.holds, () => {
       <div
         class="overflow-hidden bg-white rounded-[16px] relative route-card cursor-pointer"
         :class="{ 'route-card-highlighted': isHighlighted, 'route-card-playing': isPlaying }"
-        style="box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px; position: relative; width: 97%; height: 100%;"
+        style="box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px; position: relative; width: 100%; height: 100%;"
         @click="preview()"
       >
         <div
           ref="innerbox"
-          class="relative bg-cover bg-center m-[4px] rounded-[12px] flex items-center justify-center overflow-hidden"
-          :style="{ backgroundImage: `url(${plywood})`, minHeight: 0, position: 'relative', width: '97%', height: '100%', pointerEvents: 'none' }"
+          class="relative bg-cover bg-center rounded-[12px] flex items-center justify-center overflow-hidden"
+          :style="{ backgroundImage: `url(${plywood})`, minHeight: 0, position: 'relative', width: '100%', height: '100%', pointerEvents: 'none' }"
         >
           <v-stage
             ref="stage"
             :config="configKonva"
             class="touch-none"
-            style="width: 100%; height: 100%; position: absolute; top: 5%; left: 0; pointer-events: none;"
+            style="width: 100%; height: 100%; position: absolute; top: 0; left: 0; pointer-events: none;"
           ></v-stage>
           <video
             v-if="hasVideo && videoSrc"
@@ -414,6 +421,7 @@ watch(() => props.route.data?.problem?.holds, () => {
             class="absolute"
             :style="{ opacity: isPlaying ? 0.3 : 0.5, zIndex: 2, pointerEvents: 'none', ...videoStyle, objectFit: 'contain' }"
             @ended="onVideoEnded"
+            @pause="onVideoPaused"
             @error="onVideoError"
             @loadeddata="onVideoLoaded"
             @canplay="onVideoLoaded"
@@ -422,18 +430,6 @@ watch(() => props.route.data?.problem?.holds, () => {
             playsinline
             preload="auto"
           ></video>
-          <button
-            v-if="hasVideo && videoSrc"
-            @click.stop="toggleVideo"
-            class="absolute pointer-events-auto bg-black bg-opacity-50 hover:bg-opacity-70 transition-all rounded-full flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14"
-            style="top: calc(92%); left: 60%; transform: translate(-50%, -50%); box-shadow: rgba(0, 0, 0, 0.6) 0px 4px 12px; z-index: 15;"
-          >
-            <span
-              :class="isPlaying ? 'pi pi-pause' : 'pi pi-play'"
-              class="text-white text-lg sm:text-xl"
-              :style="isPlaying ? '' : 'margin-left: 2px;'"
-            ></span>
-          </button>
         </div>
         <div class="absolute top-2 left-2 right-2 flex items-center gap-2 z-10 pointer-events-none">
           <div
@@ -444,24 +440,43 @@ watch(() => props.route.data?.problem?.holds, () => {
           </div>
           <DifficultyTag v-if="props.route.data?.grade" :grade="props.route.data.grade" class="flex-shrink-0"></DifficultyTag>
         </div>
-        <div class="absolute bottom-2 left-2 right-2 flex justify-between items-center pointer-events-none" style="z-index: 30;">
-          <button
-            class="flex justify-center items-center bg-[#ED6A5A] text-white h-[36px] w-[36px] sm:h-[40px] sm:w-[40px] rounded-full p-2 flex-shrink-0 pointer-events-auto route-action-button"
-            style="
-              box-shadow:
-                rgba(50, 50, 93, 0.25) 0px 13px 27px -5px,
-                rgba(0, 0, 0, 0.3) 0px 8px 16px -8px;
-            "
-            @click.stop="editRoute('/session')"
-          >
-            <div class="text-primary font-light flex items-center gap-1 text-xs">
-              <img
-                src="@/assets/images/climber-white.svg"
-                class="h-[18px] w-[18px] sm:h-[22px] sm:w-[22px] inline-block fill-black"
-              />
-            </div>
-          </button>
-          <div class="flex items-center pointer-events-none" style="gap: 4%; margin-right: 0.5rem;">
+        <div class="absolute bottom-2 left-2 right-2 flex justify-between items-end pointer-events-none" style="z-index: 30;">
+          <div class="flex flex-col items-start pointer-events-none" style="gap: 0.5rem;">
+            <button
+              v-if="hasVideo && videoSrc"
+              @click.stop="toggleVideo"
+              class="flex justify-center items-center gap-1.5 border bg-white border-primary text-primary h-[28px] px-3 sm:h-[32px] sm:px-4 rounded-full flex-shrink-0 pointer-events-auto route-action-button"
+              style="
+                box-shadow:
+                  rgba(50, 50, 93, 0.25) 0px 13px 27px -5px,
+                  rgba(0, 0, 0, 0.3) 0px 8px 16px -8px;
+              "
+            >
+              <span
+                :class="isPlaying ? 'pi pi-pause' : 'pi pi-video'"
+                class="text-primary inline-block"
+                style="font-size: 11px; font-weight: 100"
+              ></span>
+              <span class="text-primary font-normal" style="font-size: 11px;">Preview</span>
+            </button>
+            <button
+              class="flex justify-center items-center bg-[#ED6A5A] text-white h-[36px] w-[36px] sm:h-[40px] sm:w-[40px] rounded-full p-2 flex-shrink-0 pointer-events-auto route-action-button"
+              style="
+                box-shadow:
+                  rgba(50, 50, 93, 0.25) 0px 13px 27px -5px,
+                  rgba(0, 0, 0, 0.3) 0px 8px 16px -8px;
+              "
+              @click.stop="editRoute('/session')"
+            >
+              <div class="text-primary font-light flex items-center gap-1 text-xs">
+                <img
+                  src="@/assets/images/climber-white.svg"
+                  class="h-[18px] w-[18px] sm:h-[22px] sm:w-[22px] inline-block fill-black"
+                />
+              </div>
+            </button>
+          </div>
+          <div class="flex items-center pointer-events-none" style="gap: 0.5rem;">
             <button
               class="flex justify-center items-center border bg-white border-primary text-white h-[28px] w-[28px] sm:h-[32px] sm:w-[32px] p-1.5 sm:p-2 rounded-full flex-shrink-0 pointer-events-auto route-action-button"
               style="
@@ -533,7 +548,7 @@ watch(() => props.route.data?.problem?.holds, () => {
 $primary-color: #000;
 
 .route-card {
-  width: 97%;
+  width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
