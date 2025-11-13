@@ -15,13 +15,24 @@ const dialog = useDialog()
 
 const selectedGrade = ref<ClimbingRouteGrade | null>(null)
 
-const gradeOptions = [
-  { label: 'All Grades', value: null },
-  ...Object.values(ClimbingRouteGrade).map((grade) => ({
-    label: grade,
-    value: grade,
-  })),
-]
+const gradeOptions = computed(() => {
+  const availableGrades = new Set<ClimbingRouteGrade>()
+  routesStore.routes.forEach((route) => {
+    if (route.data?.grade) {
+      availableGrades.add(route.data.grade)
+    }
+  })
+  
+  return [
+    { label: 'All Grades', value: null },
+    ...Object.values(ClimbingRouteGrade)
+      .filter((grade) => availableGrades.has(grade))
+      .map((grade) => ({
+        label: grade,
+        value: grade,
+      })),
+  ]
+})
 
 const filteredRoutes = computed(() => {
   if (!selectedGrade.value) {
@@ -111,9 +122,10 @@ function createRoute() {
       ></RouteView>
     </div>
     <div v-if="filteredRoutes.length === 0" class="empty-state">
-      <i class="pi pi-inbox empty-icon"></i>
-      <p class="empty-message">No routes found</p>
-      <p class="empty-submessage" v-if="selectedGrade">
+      <i v-if="routesStore.isLoading" class="pi pi-spin pi-spinner empty-icon"></i>
+      <i v-else class="pi pi-inbox empty-icon"></i>
+      <p class="empty-message">{{ routesStore.isLoading ? 'Loading routes...' : 'No routes found' }}</p>
+      <p class="empty-submessage" v-if="!routesStore.isLoading && selectedGrade">
         Try selecting a different grade or clear the filter
       </p>
     </div>

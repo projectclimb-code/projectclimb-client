@@ -6,9 +6,15 @@ import type { ClimbingRouteGrade } from '@/interfaces/interfaces.ts'
 
 export const useRoutesStore = defineStore('routes', () => {
   const routes = ref<Route[]>([])
+  const isLoading = ref(false)
 
   async function getRoutes() {
-    routes.value = await routesGet()
+    isLoading.value = true
+    try {
+      routes.value = await routesGet()
+    } finally {
+      isLoading.value = false
+    }
   }
 
   async function createRoute(name: string, grade: ClimbingRouteGrade, author: string) {
@@ -36,5 +42,5 @@ export const useRoutesStore = defineStore('routes', () => {
     return updatedRoute
   }
 
-  return { routes, deleteRoute, getRoutes, saveRoute, createRoute }
+  return { routes, isLoading, deleteRoute, getRoutes, saveRoute, createRoute }
 })
