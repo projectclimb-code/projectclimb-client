@@ -41,6 +41,7 @@ let observer: ResizeObserver | null = null
 let flipToastTimeout: ReturnType<typeof setTimeout> | null = null
 import type { Route } from '@/interfaces/interfaces'
 import { useRoutesStore } from '@/stores/routes'
+import { websocketService } from '@/services/ws.service'
 
 const props = defineProps<{
   route: Route
@@ -69,7 +70,7 @@ function onVideoLoaded() {
 
 onMounted(async () => {
   await nextTick()
-  
+
   if (box.value) {
     observer = new ResizeObserver((entries) => {
       const entry = entries[0]
@@ -89,7 +90,7 @@ onMounted(async () => {
     if (innerbox.value) {
       observer.observe(innerbox.value)
     }
-    
+
     // Force initial calculation
     nextTick(() => {
       if (box.value) {
@@ -101,7 +102,7 @@ onMounted(async () => {
       }
     })
   }
-  
+
   // Initialize Konva after a short delay to ensure DOM is ready
   setTimeout(() => {
     if (stage.value) {
@@ -148,13 +149,17 @@ function editRoute(path: string) {
 function preview() {
   // Add highlight effect
   isHighlighted.value = true
+  websocketService.send({
+    type: 'preview',
+    route: props.route,
+  })
   setTimeout(() => {
     isHighlighted.value = false
   }, 300)
-  
-  if (props.route.id) {
-    router.push({ path: '/session', query: { id: props.route.id } })
-  }
+
+  // if (props.route.id) {
+  //   router.push({ path: '/session', query: { id: props.route.id } })
+  // }
 }
 
 async function toggleVideo(event: Event) {
@@ -163,7 +168,7 @@ async function toggleVideo(event: Event) {
     console.warn('Video ref or route ID not available')
     return
   }
-  
+
   try {
     if (isPlaying.value) {
       videoRef.value.pause()
@@ -196,11 +201,11 @@ function deleteRoute() {
 
 function flipId(id: string): string {
   const numId = parseInt(id, 10)
-  
+
   if (isNaN(numId)) {
     return id
   }
-  
+
   if (numId >= 0 && numId < 100) {
     return String(numId + 100)
   } else if (numId >= 100 && numId < 200) {
@@ -214,12 +219,12 @@ async function flipRoute() {
   if (!props.route.id || !props.route.data?.problem?.holds) {
     return
   }
-  
+
   const flippedHolds = props.route.data.problem.holds.map(hold => ({
     ...hold,
     id: flipId(hold.id)
   }))
-  
+
   const flippedRoute: Route = {
     ...props.route,
     data: {
@@ -230,16 +235,16 @@ async function flipRoute() {
       }
     }
   }
-  
+
   try {
     await routesStore.saveRoute(flippedRoute)
     updatePathColors()
-    
+
     // Clear any pending toast notification
     if (flipToastTimeout) {
       clearTimeout(flipToastTimeout)
     }
-    
+
     // Debounce the toast notification
     flipToastTimeout = setTimeout(() => {
       toast.add({
@@ -253,12 +258,12 @@ async function flipRoute() {
     }, 300)
   } catch (error) {
     console.error('Failed to flip route:', error)
-    
+
     // Clear any pending toast notification
     if (flipToastTimeout) {
       clearTimeout(flipToastTimeout)
     }
-    
+
     // Show error immediately (no debounce for errors)
     toast.add({
       severity: 'error',
@@ -272,21 +277,21 @@ async function flipRoute() {
 
 function updateKonvaSize() {
   if (!innerbox.value || !stage.value) return
-  
+
   const container = innerbox.value as HTMLElement
   const containerWidth = container.clientWidth
   const containerHeight = container.clientHeight
-  
+
   if (containerWidth > 0 && containerHeight > 0) {
     configKonva.value.width = containerWidth
     configKonva.value.height = containerHeight
-    
+
     if (mainLayer.value) {
       const konvaStage = stage.value.getNode()
       scaleLayer(mainLayer.value, konvaStage)
-      
+
       // SVG is already scaled by scaleLayer to fit - no additional scaling needed
-      
+
       // Update video style to match Konva stage exactly
       videoStyle.value = {
         top: '5%',
@@ -294,7 +299,7 @@ function updateKonvaSize() {
         width: '100%',
         height: '100%',
       }
-      
+
       konvaStage.draw()
     }
   }
@@ -302,23 +307,23 @@ function updateKonvaSize() {
 
 function updatePathColors() {
   if (!mainLayer.value || !stage.value) return
-  
+
   const konvaStage = stage.value.getNode()
   const children = mainLayer.value.children
   if (!children) return
-  
+
   // Extract hold IDs from route data
   const routeHolds = props.route.data?.problem?.holds || []
   const startHolds = routeHolds.filter(h => h.type === HoldType.start).map(h => h.id)
   const endHolds = routeHolds.filter(h => h.type === HoldType.finish).map(h => h.id)
   const normalHolds = routeHolds.filter(h => h.type === HoldType.normal).map(h => h.id)
-  
+
   children.forEach((node: any) => {
     const pathId = node.id()
     const isStart = startHolds.includes(pathId)
     const isEnd = endHolds.includes(pathId)
     const isNormal = normalHolds.includes(pathId)
-    
+
     if (isStart) {
       node.fill('green')
       node.opacity(1)
@@ -337,18 +342,18 @@ function updatePathColors() {
       node.strokeWidth(5)
     }
   })
-  
+
   konvaStage.draw()
 }
 
 async function initKonva() {
   if (!stage.value) return
-  
+
   const konvaStage = stage.value.getNode()
-  
+
   // Load wall SVG without click handlers (read-only)
   mainLayer.value = await loadWallSvg(undefined, [], null)
-  
+
   // Remove all event listeners to make it read-only
   const children = mainLayer.value.children
   if (children) {
@@ -358,12 +363,12 @@ async function initKonva() {
       node.listening(false)
     })
   }
-  
+
   updateKonvaSize()
   scaleLayer(mainLayer.value, konvaStage)
-  
+
   // SVG is already scaled by scaleLayer to fit - no additional scaling needed
-  
+
   konvaStage.add(mainLayer.value)
   updatePathColors()
   konvaStage.draw()
@@ -563,19 +568,19 @@ $primary-color: #000;
   .route-card {
     width: 100% !important;
   }
-  
+
   .route-card > div:first-child {
     padding-top: 3%;
   }
-  
+
   .route-action-button {
     transform: scale(1);
   }
-  
+
   .route-action-button:hover {
     transform: scale(1.05);
   }
-  
+
   .route-action-button:active {
     transform: scale(0.98);
   }
