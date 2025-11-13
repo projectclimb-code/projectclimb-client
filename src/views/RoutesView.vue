@@ -15,13 +15,24 @@ const dialog = useDialog()
 
 const selectedGrade = ref<ClimbingRouteGrade | null>(null)
 
-const gradeOptions = [
-  { label: 'All Grades', value: null },
-  ...Object.values(ClimbingRouteGrade).map((grade) => ({
-    label: grade,
-    value: grade,
-  })),
-]
+const gradeOptions = computed(() => {
+  const availableGrades = new Set<ClimbingRouteGrade>()
+  routesStore.routes.forEach((route) => {
+    if (route.data?.grade) {
+      availableGrades.add(route.data.grade)
+    }
+  })
+  
+  return [
+    { label: 'All Grades', value: null },
+    ...Object.values(ClimbingRouteGrade)
+      .filter((grade) => availableGrades.has(grade))
+      .map((grade) => ({
+        label: grade,
+        value: grade,
+      })),
+  ]
+})
 
 const filteredRoutes = computed(() => {
   if (!selectedGrade.value) {
@@ -66,10 +77,10 @@ function createRoute() {
     onClose: async (result) => {
       console.log('Dialog onClose called with result:', result)
       const data = result?.data
-      if (data && data.name && data.grade && data.author) {
+      if (data && data.name && data.author) {
         console.log('Creating route with:', { name: data.name, grade: data.grade, author: data.author })
         try {
-          const newRoute = await routesStore.createRoute(data.name, data.grade, data.author)
+          const newRoute = await routesStore.createRoute(data.name, data.grade || '', data.author)
           console.log('Route created:', newRoute)
           routesStore.getRoutes()
           if (newRoute && newRoute.id) {
@@ -111,9 +122,10 @@ function createRoute() {
       ></RouteView>
     </div>
     <div v-if="filteredRoutes.length === 0" class="empty-state">
-      <i class="pi pi-inbox empty-icon"></i>
-      <p class="empty-message">No routes found</p>
-      <p class="empty-submessage" v-if="selectedGrade">
+      <i v-if="routesStore.isLoading" class="pi pi-spin pi-spinner empty-icon"></i>
+      <i v-else class="pi pi-inbox empty-icon"></i>
+      <p class="empty-message">{{ routesStore.isLoading ? 'Loading routes...' : 'No routes found' }}</p>
+      <p class="empty-submessage" v-if="!routesStore.isLoading && selectedGrade">
         Try selecting a different grade or clear the filter
       </p>
     </div>
@@ -160,11 +172,14 @@ function createRoute() {
   min-height: 0;
   display: flex;
   align-items: stretch;
+  aspect-ratio: 0.6;
 }
 
 .route-view-item > * {
   width: 100%;
+  height: 100%;
   min-width: 0;
+  min-height: 0;
 }
 
 .empty-state {
@@ -236,6 +251,15 @@ function createRoute() {
 
   .empty-message {
     font-size: 1.1rem;
+  }
+  
+  .route-view-item {
+    aspect-ratio: 0.65;
+  }
+  
+  .grid {
+    gap: 1rem !important;
+    padding: 1rem !important;
   }
 }
 </style>

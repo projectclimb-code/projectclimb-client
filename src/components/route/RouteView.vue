@@ -1,20 +1,34 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, nextTick, onActivated, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, onActivated, watch } from 'vue'
 import plywood from '@/assets/images/plywood.jpg'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import DifficultyTag from './DifficultyTag.vue'
 import { useRouter } from 'vue-router'
 import { loadWallSvg, scaleLayer } from '@/wall/wall'
+import { constants } from '@/utils/constants'
 import { HoldType } from '@/interfaces/interfaces'
+import { useToast } from 'primevue/usetoast'
+import { useVideoPlayer } from '@/composables/useVideoPlayer'
 
 const box = ref<HTMLElement | null>(null)
 const innerbox = ref<HTMLElement | null>(null)
 const isWide = ref(false)
 const ratio = ref(1)
 const visible = ref(false)
+const isHighlighted = ref(false)
+const isPlaying = ref(false)
 const router = useRouter()
 const routesStore = useRoutesStore()
+const toast = useToast()
+const videoRef = ref<HTMLVideoElement | null>(null)
+const { setActiveVideo, clearActiveVideo, isActiveVideo } = useVideoPlayer()
+const videoStyle = ref({
+  top: '0',
+  left: '0',
+  width: '100%',
+  height: '100%',
+})
 
 const configKonva = ref({
   width: 200,
@@ -24,6 +38,7 @@ const stage = ref<any>(null)
 const mainLayer = ref<any>(null)
 
 let observer: ResizeObserver | null = null
+let flipToastTimeout: ReturnType<typeof setTimeout> | null = null
 import type { Route } from '@/interfaces/interfaces'
 import { useRoutesStore } from '@/stores/routes'
 import { websocketService } from '@/services/ws.service'
@@ -32,9 +47,30 @@ const props = defineProps<{
   route: Route
 }>()
 
+// List of available video IDs
+const availableVideoIds = [69, 75, 76, 77, 78, 79, 80]
+
+const hasVideo = computed(() => {
+  if (!props.route.id) return false
+  return availableVideoIds.includes(props.route.id)
+})
+
+const videoSrc = computed(() => {
+  if (!hasVideo.value || !props.route.id) return null
+  return `/videos/${props.route.id}.webm`
+})
+
+function onVideoError(event: Event) {
+  console.warn(`Video not found for route ID ${props.route.id}:`, videoSrc.value)
+}
+
+function onVideoLoaded() {
+  // Video loaded successfully
+}
+
 onMounted(async () => {
   await nextTick()
-  
+
   if (box.value) {
     observer = new ResizeObserver((entries) => {
       const entry = entries[0]
@@ -54,7 +90,7 @@ onMounted(async () => {
     if (innerbox.value) {
       observer.observe(innerbox.value)
     }
-    
+
     // Force initial calculation
     nextTick(() => {
       if (box.value) {
@@ -66,7 +102,7 @@ onMounted(async () => {
       }
     })
   }
-  
+
   // Initialize Konva after a short delay to ensure DOM is ready
   setTimeout(() => {
     if (stage.value) {
@@ -97,6 +133,13 @@ onActivated(async () => {
 
 onBeforeUnmount(() => {
   if (observer) observer.disconnect()
+  if (videoRef.value) {
+    videoRef.value.pause()
+    if (isActiveVideo(props.route.id)) {
+      clearActiveVideo()
+    }
+    videoRef.value = null
+  }
 })
 
 function editRoute(path: string) {
@@ -104,10 +147,56 @@ function editRoute(path: string) {
 }
 
 function preview() {
+  // Add highlight effect
+  isHighlighted.value = true
   websocketService.send({
     type: 'preview',
     route: props.route,
   })
+  setTimeout(() => {
+    isHighlighted.value = false
+  }, 300)
+
+  // if (props.route.id) {
+  //   router.push({ path: '/session', query: { id: props.route.id } })
+  // }
+}
+
+async function toggleVideo(event: Event) {
+  event.stopPropagation()
+  if (!videoRef.value || !props.route.id) {
+    console.warn('Video ref or route ID not available')
+    return
+  }
+
+  try {
+    if (isPlaying.value) {
+      videoRef.value.pause()
+      isPlaying.value = false
+      clearActiveVideo()
+    } else {
+      // Set this as the active video (will pause others)
+      setActiveVideo(props.route.id, videoRef.value)
+      await videoRef.value.play()
+      isPlaying.value = true
+    }
+  } catch (error) {
+    console.error('Error toggling video:', error)
+  }
+}
+
+function onVideoEnded() {
+  isPlaying.value = false
+  if (isActiveVideo(props.route.id)) {
+    clearActiveVideo()
+  }
+}
+
+function onVideoPaused() {
+  // Update playing state when video is paused (including when paused by another video starting)
+  if (videoRef.value && videoRef.value.paused) {
+    isPlaying.value = false
+  }
 }
 
 function deleteRoute() {
@@ -117,20 +206,107 @@ function deleteRoute() {
   }
 }
 
+function flipId(id: string): string {
+  const numId = parseInt(id, 10)
+
+  if (isNaN(numId)) {
+    return id
+  }
+
+  if (numId >= 0 && numId < 100) {
+    return String(numId + 100)
+  } else if (numId >= 100 && numId < 200) {
+    return String(numId - 100)
+  } else {
+    return id
+  }
+}
+
+async function flipRoute() {
+  if (!props.route.id || !props.route.data?.problem?.holds) {
+    return
+  }
+
+  const flippedHolds = props.route.data.problem.holds.map(hold => ({
+    ...hold,
+    id: flipId(hold.id)
+  }))
+
+  const flippedRoute: Route = {
+    ...props.route,
+    data: {
+      ...props.route.data,
+      problem: {
+        ...props.route.data.problem,
+        holds: flippedHolds
+      }
+    }
+  }
+
+  try {
+    await routesStore.saveRoute(flippedRoute)
+    updatePathColors()
+
+    // Clear any pending toast notification
+    if (flipToastTimeout) {
+      clearTimeout(flipToastTimeout)
+    }
+
+    // Debounce the toast notification
+    flipToastTimeout = setTimeout(() => {
+      toast.add({
+        severity: 'success',
+        summary: 'Success',
+        detail: 'Route flipped successfully',
+        life: 3000,
+        group: 'flip'
+      })
+      flipToastTimeout = null
+    }, 300)
+  } catch (error) {
+    console.error('Failed to flip route:', error)
+
+    // Clear any pending toast notification
+    if (flipToastTimeout) {
+      clearTimeout(flipToastTimeout)
+    }
+
+    // Show error immediately (no debounce for errors)
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to flip route',
+      life: 3000,
+      group: 'flip'
+    })
+  }
+}
+
 function updateKonvaSize() {
   if (!innerbox.value || !stage.value) return
-  
+
   const container = innerbox.value as HTMLElement
   const containerWidth = container.clientWidth
   const containerHeight = container.clientHeight
-  
+
   if (containerWidth > 0 && containerHeight > 0) {
     configKonva.value.width = containerWidth
     configKonva.value.height = containerHeight
-    
+
     if (mainLayer.value) {
       const konvaStage = stage.value.getNode()
       scaleLayer(mainLayer.value, konvaStage)
+
+      // SVG is already scaled by scaleLayer to fit - no additional scaling needed
+
+      // Update video style to match Konva stage exactly
+      videoStyle.value = {
+        top: '0',
+        left: '0',
+        width: '100%',
+        height: '100%',
+      }
+
       konvaStage.draw()
     }
   }
@@ -138,49 +314,53 @@ function updateKonvaSize() {
 
 function updatePathColors() {
   if (!mainLayer.value || !stage.value) return
-  
+
   const konvaStage = stage.value.getNode()
   const children = mainLayer.value.children
   if (!children) return
-  
+
   // Extract hold IDs from route data
   const routeHolds = props.route.data?.problem?.holds || []
   const startHolds = routeHolds.filter(h => h.type === HoldType.start).map(h => h.id)
   const endHolds = routeHolds.filter(h => h.type === HoldType.finish).map(h => h.id)
   const normalHolds = routeHolds.filter(h => h.type === HoldType.normal).map(h => h.id)
-  
+
   children.forEach((node: any) => {
     const pathId = node.id()
     const isStart = startHolds.includes(pathId)
     const isEnd = endHolds.includes(pathId)
     const isNormal = normalHolds.includes(pathId)
-    
+
     if (isStart) {
       node.fill('green')
       node.opacity(1)
+      node.strokeWidth(8)
     } else if (isEnd) {
       node.fill('red')
       node.opacity(1)
+      node.strokeWidth(8)
     } else if (isNormal) {
       node.fill('white')
       node.opacity(1)
+      node.strokeWidth(8)
     } else {
       node.fill('white')
-      node.opacity(0.3)
+      node.opacity(0.6)
+      node.strokeWidth(5)
     }
   })
-  
+
   konvaStage.draw()
 }
 
 async function initKonva() {
   if (!stage.value) return
-  
+
   const konvaStage = stage.value.getNode()
-  
+
   // Load wall SVG without click handlers (read-only)
   mainLayer.value = await loadWallSvg(undefined, [], null)
-  
+
   // Remove all event listeners to make it read-only
   const children = mainLayer.value.children
   if (children) {
@@ -190,9 +370,12 @@ async function initKonva() {
       node.listening(false)
     })
   }
-  
+
   updateKonvaSize()
   scaleLayer(mainLayer.value, konvaStage)
+
+  // SVG is already scaled by scaleLayer to fit - no additional scaling needed
+
   konvaStage.add(mainLayer.value)
   updatePathColors()
   konvaStage.draw()
@@ -207,32 +390,46 @@ watch(() => props.route.data?.problem?.holds, () => {
 
 </script>
 <template>
-  <div ref="box" class="flex items-center justify-center relative w-full h-full min-h-0">
+  <div ref="box" class="flex items-center justify-center relative w-full h-full min-h-0" style="width: 100%; height: 100%;">
     <!-- aspect is width/height = 4/3 -> height/width = 0.75 -->
 
     <div
-      class="bg-cover bg-center aspect-[0.78] flex items-center justify-center"
-      :class="{
-        'h-full max-w-full': isWide,
-        'w-full max-h-full': !isWide,
-      }"
-      style="min-width: 0; min-height: 0;"
+      class="bg-cover bg-center flex items-center justify-center"
+      style="min-width: 0; min-height: 0; width: 100%; height: 100%;"
     >
       <div
-        class="overflow-hidden bg-white rounded-[16px] relative route-card"
+        class="overflow-hidden bg-white rounded-[16px] relative route-card cursor-pointer"
+        :class="{ 'route-card-highlighted': isHighlighted, 'route-card-playing': isPlaying }"
         style="box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px; position: relative; width: 100%; height: 100%;"
+        @click="preview()"
       >
         <div
           ref="innerbox"
-          class="relative bg-cover bg-center m-[4px] rounded-[12px] flex items-center justify-center overflow-hidden"
-          :style="{ backgroundImage: `url(${plywood})`, minHeight: 0, position: 'relative', width: '100%', height: '100%' }"
+          class="relative bg-cover bg-center rounded-[12px] flex items-center justify-center overflow-hidden"
+          :style="{ backgroundImage: `url(${plywood})`, minHeight: 0, position: 'relative', width: '100%', height: '100%', pointerEvents: 'none' }"
         >
           <v-stage
             ref="stage"
             :config="configKonva"
             class="touch-none"
-            style="width: 100%; height: 100%; position: absolute; top: 0; left: 0;"
+            style="width: 100%; height: 100%; position: absolute; top: 0; left: 0; pointer-events: none;"
           ></v-stage>
+          <video
+            v-if="hasVideo && videoSrc"
+            ref="videoRef"
+            :src="videoSrc"
+            class="absolute"
+            :style="{ opacity: isPlaying ? 0.3 : 0.5, zIndex: 2, pointerEvents: 'none', ...videoStyle, objectFit: 'contain' }"
+            @ended="onVideoEnded"
+            @pause="onVideoPaused"
+            @error="onVideoError"
+            @loadeddata="onVideoLoaded"
+            @canplay="onVideoLoaded"
+            loop
+            muted
+            playsinline
+            preload="auto"
+          ></video>
         </div>
         <div class="absolute top-2 left-2 right-2 flex items-center gap-2 z-10 pointer-events-none">
           <div
@@ -241,82 +438,88 @@ watch(() => props.route.data?.problem?.holds, () => {
           >
             {{ props.route.name }}
           </div>
-          <DifficultyTag :grade="props.route.data.grade" class="flex-shrink-0"></DifficultyTag>
+          <DifficultyTag v-if="props.route.data?.grade" :grade="props.route.data.grade" class="flex-shrink-0"></DifficultyTag>
         </div>
-        <div class="absolute bottom-2 left-2 right-2 px-2 flex gap-1.5 justify-end items-center z-10">
-          
-          <button
-            class="mr-auto flex justify-center items-center bg-[#ED6A5A] text-white h-[36px] w-[36px] sm:h-[40px] sm:w-[40px] rounded-full p-2 flex-shrink-0 pointer-events-auto"
-            style="
-              box-shadow:
-                rgba(50, 50, 93, 0.25) 0px 13px 27px -5px,
-                rgba(0, 0, 0, 0.3) 0px 8px 16px -8px;
-            "
-            @click="editRoute('/session')"
-          >
-            <div class="text-primary font-light flex items-center gap-1 text-xs">
-              <img
-                src="@/assets/images/climber-white.svg"
-                class="h-[18px] w-[18px] sm:h-[22px] sm:w-[22px] inline-block fill-black"
-              />
-            </div>
-          </button>
-          <button
-            class="flex justify-center items-center border bg-white border-primary text-white h-[28px] w-[28px] sm:h-[32px] sm:w-[32px] p-1.5 sm:p-2 rounded-full flex-shrink-0 pointer-events-auto"
-            style="
-              box-shadow:
-                rgba(50, 50, 93, 0.25) 0px 13px 27px -5px,
-                rgba(0, 0, 0, 0.3) 0px 8px 16px -8px;
-            "
-            @click="preview()"
-          >
-            <span
-              class="pi pi-eye text-primary inline-block"
-              style="font-size: 11px; font-weight: 100"
-            ></span>
-          </button>
-          <button
-            class="flex justify-center items-center border bg-white border-primary text-white h-[28px] w-[28px] sm:h-[32px] sm:w-[32px] p-1.5 sm:p-2 rounded-full flex-shrink-0 pointer-events-auto"
-            style="
-              box-shadow:
-                rgba(50, 50, 93, 0.25) 0px 13px 27px -5px,
-                rgba(0, 0, 0, 0.3) 0px 8px 16px -8px;
-            "
-            @click="editRoute('/edit')"
-          >
-            <span
-              class="pi pi-file-edit text-primary inline-block"
-              style="font-size: 11px; font-weight: 100"
-            ></span>
-          </button>
-          <button
-            class="flex justify-center items-center border bg-white border-primary text-white h-[28px] w-[28px] sm:h-[32px] sm:w-[32px] p-1.5 sm:p-2 rounded-full flex-shrink-0 pointer-events-auto"
-            style="
-              box-shadow:
-                rgba(50, 50, 93, 0.25) 0px 13px 27px -5px,
-                rgba(0, 0, 0, 0.3) 0px 8px 16px -8px;
-            "
-            @click="preview()"
-          >
-            <span
-              class="pi pi-arrow-right-arrow-left text-primary inline-block"
-              style="font-size: 11px; font-weight: 100"
-            ></span>
-          </button>
-          <button
-            class="flex justify-center items-center border bg-white border-primary text-white h-[28px] w-[28px] sm:h-[32px] sm:w-[32px] p-1.5 sm:p-2 rounded-full flex-shrink-0 pointer-events-auto"
-            style="
-              box-shadow:
-                rgba(50, 50, 93, 0.25) 0px 13px 27px -5px,
-                rgba(0, 0, 0, 0.3) 0px 8px 16px -8px;
-            "
-            @click="visible = true"
-          >
-            <span
-              class="pi pi-trash text-primary inline-block"
-              style="font-size: 11px; font-weight: 100"
-            ></span>
-          </button>
+        <div class="absolute bottom-2 left-2 right-2 flex justify-between items-end pointer-events-none" style="z-index: 30;">
+          <div class="flex flex-col items-start pointer-events-none" style="gap: 0.5rem;">
+            <button
+              v-if="hasVideo && videoSrc"
+              @click.stop="toggleVideo"
+              class="flex justify-center items-center gap-1.5 border bg-white border-primary text-primary h-[28px] px-3 sm:h-[32px] sm:px-4 rounded-full flex-shrink-0 pointer-events-auto route-action-button"
+              style="
+                box-shadow:
+                  rgba(50, 50, 93, 0.25) 0px 13px 27px -5px,
+                  rgba(0, 0, 0, 0.3) 0px 8px 16px -8px;
+              "
+            >
+              <span
+                :class="isPlaying ? 'pi pi-pause' : 'pi pi-video'"
+                class="text-primary inline-block"
+                style="font-size: 11px; font-weight: 100"
+              ></span>
+              <span class="text-primary font-normal" style="font-size: 11px;">Preview</span>
+            </button>
+            <button
+              class="flex justify-center items-center bg-[#ED6A5A] text-white h-[36px] w-[36px] sm:h-[40px] sm:w-[40px] rounded-full p-2 flex-shrink-0 pointer-events-auto route-action-button"
+              style="
+                box-shadow:
+                  rgba(50, 50, 93, 0.25) 0px 13px 27px -5px,
+                  rgba(0, 0, 0, 0.3) 0px 8px 16px -8px;
+              "
+              @click.stop="editRoute('/session')"
+            >
+              <div class="text-primary font-light flex items-center gap-1 text-xs">
+                <img
+                  src="@/assets/images/climber-white.svg"
+                  class="h-[18px] w-[18px] sm:h-[22px] sm:w-[22px] inline-block fill-black"
+                />
+              </div>
+            </button>
+          </div>
+          <div class="flex items-center pointer-events-none" style="gap: 0.5rem;">
+            <button
+              class="flex justify-center items-center border bg-white border-primary text-white h-[28px] w-[28px] sm:h-[32px] sm:w-[32px] p-1.5 sm:p-2 rounded-full flex-shrink-0 pointer-events-auto route-action-button"
+              style="
+                box-shadow:
+                  rgba(50, 50, 93, 0.25) 0px 13px 27px -5px,
+                  rgba(0, 0, 0, 0.3) 0px 8px 16px -8px;
+              "
+              @click.stop="editRoute('/edit')"
+            >
+              <span
+                class="pi pi-pencil text-primary inline-block"
+                style="font-size: 11px; font-weight: 100"
+              ></span>
+            </button>
+            <button
+              class="flex justify-center items-center border bg-white border-primary text-white h-[28px] w-[28px] sm:h-[32px] sm:w-[32px] p-1.5 sm:p-2 rounded-full flex-shrink-0 pointer-events-auto route-action-button"
+              style="
+                box-shadow:
+                  rgba(50, 50, 93, 0.25) 0px 13px 27px -5px,
+                  rgba(0, 0, 0, 0.3) 0px 8px 16px -8px;
+              "
+              @click.stop="flipRoute()"
+            >
+              <span
+                class="pi pi-arrow-right-arrow-left text-primary inline-block"
+                style="font-size: 11px; font-weight: 100"
+              ></span>
+            </button>
+            <button
+              class="flex justify-center items-center border bg-white border-primary text-white h-[28px] w-[28px] sm:h-[32px] sm:w-[32px] p-1.5 sm:p-2 rounded-full flex-shrink-0 pointer-events-auto route-action-button"
+              style="
+                box-shadow:
+                  rgba(50, 50, 93, 0.25) 0px 13px 27px -5px,
+                  rgba(0, 0, 0, 0.3) 0px 8px 16px -8px;
+              "
+              @click.stop="visible = true"
+            >
+              <span
+                class="pi pi-trash text-primary inline-block"
+                style="font-size: 11px; font-weight: 100"
+              ></span>
+            </button>
+          </div>
 
           <Dialog
             v-model:visible="visible"
@@ -352,6 +555,20 @@ $primary-color: #000;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  margin: 0 auto;
+  transition: all 0.3s ease;
+}
+
+.route-card-highlighted {
+  box-shadow: rgba(64, 149, 242, 0.6) 0px 5px 25px !important;
+  transform: scale(0.98);
+  background-color: rgba(64, 149, 242, 0.05) !important;
+}
+
+.route-card-playing {
+  box-shadow: rgba(64, 149, 242, 0.8) 0px 5px 25px !important;
+  border: 2px solid rgba(64, 149, 242, 0.6) !important;
+  background-color: rgba(64, 149, 242, 0.1) !important;
 }
 
 .route-card > div:first-child {
@@ -366,6 +583,44 @@ $primary-color: #000;
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+}
+
+@media (max-width: 640px) {
+  .route-card {
+    width: 100% !important;
+  }
+
+  .route-card > div:first-child {
+    padding-top: 3%;
+  }
+
+  .route-action-button {
+    transform: scale(1);
+  }
+
+  .route-action-button:hover {
+    transform: scale(1.05);
+  }
+
+  .route-action-button:active {
+    transform: scale(0.98);
+  }
+}
+
+.route-action-button {
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.route-action-button:hover {
+  transform: scale(1.1);
+  box-shadow:
+    rgba(50, 50, 93, 0.35) 0px 15px 35px -5px,
+    rgba(0, 0, 0, 0.4) 0px 10px 20px -8px !important;
+}
+
+.route-action-button:active {
+  transform: scale(0.95);
 }
 
 </style>

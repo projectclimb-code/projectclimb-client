@@ -4,13 +4,13 @@
       <div class="header-icon">
         <i :class="isEditMode ? 'pi pi-file-edit' : 'pi pi-plus-circle'"></i>
       </div>
-      <h3 class="dialog-title">{{ isEditMode ? 'Edit Boulder' : 'Create New Boulder' }}</h3>
+      <h3 class="dialog-title">{{ selectGradeOnly ? 'Select Grade' : (isEditMode ? 'Edit Boulder' : 'Create New Boulder') }}</h3>
       <p class="dialog-description">
-        {{ isEditMode ? 'Update the name and grade for this boulder route.' : 'Enter a name and select a grade for your new boulder route.' }}
+        {{ selectGradeOnly ? 'Please select a grade for this route before saving.' : (isEditMode ? 'Update the name and grade for this boulder route.' : 'Enter a name for your new boulder route.') }}
       </p>
     </div>
     <div class="dialog-content">
-      <div class="form-field">
+      <div v-if="!selectGradeOnly" class="form-field">
         <label for="boulderName" class="form-label">
           <i class="pi pi-pencil form-label-icon"></i>
           Boulder Name
@@ -24,7 +24,7 @@
           @keyup.enter="handleSubmit"
         />
       </div>
-      <div class="form-field">
+      <div v-if="isEditMode || selectGradeOnly" class="form-field">
         <label for="boulderGrade" class="form-label">
           <i class="pi pi-sort-amount-up form-label-icon"></i>
           Grade
@@ -39,7 +39,7 @@
           class="w-full grade-dropdown custom-dropdown"
         />
       </div>
-      <div class="form-field">
+      <div v-if="!selectGradeOnly" class="form-field">
         <label for="boulderAuthor" class="form-label">
           <i class="pi pi-user form-label-icon"></i>
           Author
@@ -65,10 +65,10 @@
           </template>
         </Button>
         <Button
-          :label="isEditMode ? 'Update' : 'Create'"
+          :label="selectGradeOnly ? 'Save' : (isEditMode ? 'Update' : 'Create')"
           type="button"
           class="action-button create-button"
-          :disabled="!boulderName || !selectedGrade"
+          :disabled="selectGradeOnly ? !selectedGrade : (!boulderName || (isEditMode && !selectedGrade))"
           @click="handleSubmit"
         >
           <template #icon>
@@ -96,11 +96,15 @@ const author = ref('Trinity')
 
 // Get initial data from dialogRef if editing
 const initialData = computed(() => {
-  return dialogRef?.value?.data as { route?: Route } | undefined
+  return dialogRef?.value?.data as { route?: Route; selectGradeOnly?: boolean } | undefined
 })
 
 const isEditMode = computed(() => {
   return !!initialData.value?.route
+})
+
+const selectGradeOnly = computed(() => {
+  return !!initialData.value?.selectGradeOnly
 })
 
 const gradeOptions = Object.values(ClimbingRouteGrade).map((grade) => ({
@@ -128,12 +132,33 @@ function handleSubmit() {
   console.log('handleSubmit called', { 
     boulderName: boulderName.value, 
     selectedGrade: selectedGrade.value,
-    isEditMode: isEditMode.value
+    isEditMode: isEditMode.value,
+    selectGradeOnly: selectGradeOnly.value
   })
   
-  if (!boulderName.value || !selectedGrade.value) {
+  if (selectGradeOnly.value) {
+    if (!selectedGrade.value) {
+      console.warn('Grade is required')
+      return
+    }
+    const closeData = {
+      grade: selectedGrade.value
+    }
+    if (dialogRef?.value) {
+      dialogRef.value.close(closeData)
+    }
+    return
+  }
+  
+  if (!boulderName.value) {
     console.warn('Missing required fields', { 
-      boulderName: boulderName.value, 
+      boulderName: boulderName.value
+    })
+    return
+  }
+  
+  if (isEditMode.value && !selectedGrade.value) {
+    console.warn('Grade is required when editing', { 
       selectedGrade: selectedGrade.value 
     })
     return
@@ -141,7 +166,7 @@ function handleSubmit() {
   
   const closeData = {
     name: boulderName.value.trim(),
-    grade: selectedGrade.value,
+    grade: selectedGrade.value || null,
     author: author.value.trim() || 'Trinity', // Default to 'Trinity' if empty
     isEdit: isEditMode.value,
     route: initialData.value?.route
