@@ -421,7 +421,7 @@ watch(() => props.route.data?.problem?.holds, () => {
             v-if="hasVideo && videoSrc"
             @click.stop="toggleVideo"
             class="absolute pointer-events-auto bg-black bg-opacity-50 hover:bg-opacity-70 transition-all rounded-full flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14"
-            style="top: calc(5% + 50%); left: 50%; transform: translate(-50%, -50%); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6); z-index: 15;"
+            style="top: calc(92%); left: 60%; transform: translate(-50%, -50%); box-shadow: rgba(0, 0, 0, 0.6) 0px 4px 12px; z-index: 15;"
           >
             <span
               :class="isPlaying ? 'pi pi-pause' : 'pi pi-play'"
