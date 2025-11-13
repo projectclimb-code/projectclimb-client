@@ -16,17 +16,32 @@ export class WebSocketService {
     }
 
     this.socket.onmessage = (event: MessageEvent) => {
+      // Process messages immediately - don't delay with requestAnimationFrame
+      // This ensures fastest possible data reception
       try {
         const data = JSON.parse(event.data)
-        this.listeners.forEach((cb) => cb(data))
+        // Process all listeners synchronously for immediate handling
+        this.listeners.forEach((cb) => {
+          try {
+            cb(data)
+          } catch (err) {
+            console.error('[WS] Listener error:', err)
+          }
+        })
       } catch (err) {
         console.error('[WS] Invalid message', err)
       }
     }
 
-    this.socket.onclose = () => {
-      console.log('[WS] Disconnected')
+    this.socket.onclose = (event: CloseEvent) => {
+      console.log('[WS] Disconnected', event.code, event.reason)
       this.socket = null
+      
+      // Only attempt reconnection if it was an unexpected close (not a manual disconnect)
+      // Code 1000 = normal closure, 1001 = going away, 1006 = abnormal closure
+      if (event.code !== 1000 && event.code !== 1001) {
+        // Don't auto-reconnect here - let the component handle it if needed
+      }
     }
 
     this.socket.onerror = (err) => {

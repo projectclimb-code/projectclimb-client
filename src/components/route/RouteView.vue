@@ -322,15 +322,15 @@ function updatePathColors() {
     if (isStart) {
       node.fill('green')
       node.opacity(1)
-      node.strokeWidth(13)
+      node.strokeWidth(8)
     } else if (isEnd) {
       node.fill('red')
       node.opacity(1)
-      node.strokeWidth(13)
+      node.strokeWidth(8)
     } else if (isNormal) {
       node.fill('white')
       node.opacity(1)
-      node.strokeWidth(13)
+      node.strokeWidth(8)
     } else {
       node.fill('white')
       node.opacity(0.6)
@@ -387,7 +387,7 @@ watch(() => props.route.data?.problem?.holds, () => {
     >
       <div
         class="overflow-hidden bg-white rounded-[16px] relative route-card cursor-pointer"
-        :class="{ 'route-card-highlighted': isHighlighted }"
+        :class="{ 'route-card-highlighted': isHighlighted, 'route-card-playing': isPlaying }"
         style="box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px; position: relative; width: 97%; height: 100%;"
         @click="preview()"
       >
@@ -407,7 +407,7 @@ watch(() => props.route.data?.problem?.holds, () => {
             ref="videoRef"
             :src="videoSrc"
             class="absolute"
-            :style="{ opacity: 0.5, zIndex: 2, pointerEvents: 'none', ...videoStyle, objectFit: 'contain' }"
+            :style="{ opacity: isPlaying ? 0.3 : 0.5, zIndex: 2, pointerEvents: 'none', ...videoStyle, objectFit: 'contain' }"
             @ended="onVideoEnded"
             @error="onVideoError"
             @loadeddata="onVideoLoaded"
@@ -437,7 +437,7 @@ watch(() => props.route.data?.problem?.holds, () => {
           >
             {{ props.route.name }}
           </div>
-          <DifficultyTag :grade="props.route.data.grade" class="flex-shrink-0"></DifficultyTag>
+          <DifficultyTag v-if="props.route.data?.grade" :grade="props.route.data.grade" class="flex-shrink-0"></DifficultyTag>
         </div>
         <div class="absolute bottom-2 left-2 right-2 flex justify-between items-center pointer-events-none" style="z-index: 30;">
           <button
@@ -543,6 +543,12 @@ $primary-color: #000;
   box-shadow: rgba(64, 149, 242, 0.6) 0px 5px 25px !important;
   transform: scale(0.98);
   background-color: rgba(64, 149, 242, 0.05) !important;
+}
+
+.route-card-playing {
+  box-shadow: rgba(64, 149, 242, 0.8) 0px 5px 25px !important;
+  border: 2px solid rgba(64, 149, 242, 0.6) !important;
+  background-color: rgba(64, 149, 242, 0.1) !important;
 }
 
 .route-card > div:first-child {

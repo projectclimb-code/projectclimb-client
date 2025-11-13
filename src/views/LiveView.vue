@@ -9,7 +9,11 @@
         @camera-change="handleCameraChange"
         @flip-camera="flipCamera"
       />
+      <div v-if="isLoading" class="skeleton-loader">
+        <div class="skeleton-content"></div>
+      </div>
       <CameraFeed
+        v-else
         ref="cameraFeedRef"
         @ready="handleCameraReady"
       />
@@ -34,6 +38,7 @@ const cameras = ref<CameraDevice[]>([])
 const isUsingFrontCamera = ref(true)
 const isMobile = ref(false)
 const currentStream = ref<MediaStream | null>(null)
+const isLoading = ref(true)
 let poseInstance: Pose | null = null
 
 onMounted(() => {
@@ -105,6 +110,7 @@ onBeforeUnmount(() => {
 
 function handleCameraReady(videoElement: HTMLVideoElement, pose: Pose) {
   poseInstance = pose
+  isLoading.value = false
 }
 
 function stopCamera() {
@@ -227,6 +233,39 @@ function flipCamera() {
 </script>
 
 <style scoped lang="scss">
+.skeleton-loader {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1a1a1a;
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-content {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
 .live-view-container {
   width: 100%;
   height: 100%;
