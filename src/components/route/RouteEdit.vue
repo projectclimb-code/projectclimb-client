@@ -411,6 +411,7 @@ function preview() {
   websocketService.send({
     type: 'preview',
     route: {
+      id: currentRoute.value.id,
       data: {
         problem: {
           holds: [
