@@ -53,7 +53,7 @@
         }"
       ></canvas>
     </div>
-    
+
     <ZoomControls
       v-if="!isSessionRoute"
       :is-pan-mode="isPanMode"
@@ -62,7 +62,7 @@
       @reset="handleReset"
       @toggle-pan="togglePanMode"
     />
-    
+
     <!-- Route name and grade display -->
     <div
       v-if="currentRoute && !isSessionRoute"
@@ -78,7 +78,7 @@
         <DifficultyTag :grade="currentRoute.data.grade" />
       </div>
     </div>
-    
+
   </div>
 </template>
 <script lang="ts" setup>
@@ -212,8 +212,8 @@ let flipToastTimeout: ReturnType<typeof setTimeout> | null = null
 async function handleSave() {
   disablePanMode()
   console.log('handleSave called', { currentRoute: currentRoute.value })
-  
-  if (!currentRoute.value || !currentRoute.value.id) {
+
+  if (!currentRoute.value || !currentRoute.value?.id) {
     console.warn('No route to save')
     toast.add({
       severity: 'warn',
@@ -256,18 +256,18 @@ async function handleSave() {
 }
 
 async function performSave(grade?: ClimbingRouteGrade) {
-  if (!currentRoute.value || !currentRoute.value.id) return
+  if (!currentRoute.value || !currentRoute.value?.id) return
 
   const holds: Hold[] = []
-  
+
   selectedStarts.value.forEach((id) => {
     holds.push({ id, type: HoldType.start })
   })
-  
+
   Array.from(selectedNormalPositions.value).forEach((id) => {
     holds.push({ id, type: HoldType.normal })
   })
-  
+
   if (selectedEnd.value) {
     holds.push({ id: selectedEnd.value, type: HoldType.finish })
   }
@@ -381,11 +381,11 @@ function handleEditInfo() {
 
 function flipId(id: string): string {
   const numId = parseInt(id, 10)
-  
+
   if (isNaN(numId)) {
     return id // Return as-is if not a number
   }
-  
+
   // Left side (0-99, up to 100) -> Right side (100-199)
   if (numId >= 0 && numId < 100) {
     return String(numId + 100)
@@ -404,30 +404,30 @@ function handleFlip() {
   disablePanMode()
   // Flip start holds
   selectedStarts.value = selectedStarts.value.map(id => flipId(id))
-  
+
   // Flip end hold
   if (selectedEnd.value) {
     selectedEnd.value = flipId(selectedEnd.value)
   }
-  
+
   // Flip normal holds
   const flippedNormal = new Set<string>()
   selectedNormalPositions.value.forEach(id => {
     flippedNormal.add(flipId(id))
   })
   selectedNormalPositions.value = flippedNormal
-  
+
   // Update the visual representation
   updatePathColors()
-  
+
   // Preview the flipped route
   preview()
-  
+
   // Clear any pending toast notification
   if (flipToastTimeout) {
     clearTimeout(flipToastTimeout)
   }
-  
+
   // Debounce the toast notification
   flipToastTimeout = setTimeout(() => {
     toast.add({
@@ -445,6 +445,7 @@ function preview() {
   websocketService.send({
     type: 'preview',
     route: {
+      id: currentRoute.value?.id,
       data: {
         problem: {
           holds: [
@@ -494,10 +495,10 @@ function isWideScreen(width?: number, height?: number) {
     }, 50)
     return
   }
-  
+
   const containerWidth = (innerbox.value as HTMLElement).clientWidth
   const containerHeight = (innerbox.value as HTMLElement).clientHeight
-  
+
   if (containerWidth === 0 || containerHeight === 0) {
     setTimeout(() => {
       if (innerbox.value) {
@@ -510,33 +511,33 @@ function isWideScreen(width?: number, height?: number) {
     }, 50)
     return
   }
-  
+
   configKonva.value.width = containerWidth
   configKonva.value.height = containerHeight
   ratio.value = containerWidth / containerHeight
   isWide.value = ratio.value > 0.78
-  
+
   const viewportWidth = window.innerWidth
   const viewportHeight = window.innerHeight
   isMobile.value = viewportWidth < 640
   isTablet.value = viewportWidth >= 640 && viewportWidth < 1024
   isLandscape.value = viewportWidth > viewportHeight
-  
+
   if (stage.value && mainLayer.value) {
     const konvaStage = stage.value.getNode()
     scaleLayer(mainLayer.value, konvaStage)
-    
+
     // Update base scale and position after resize
     baseScale.value = mainLayer.value.scaleX()
     basePosition.value = {
       x: mainLayer.value.x(),
       y: mainLayer.value.y(),
     }
-    
+
     // Reapply transform with new base values
     applyTransform()
     konvaStage.draw()
-    
+
     // Update skeleton canvas size to match SVG
     if (isSessionRoute.value) {
       updateSkeletonCanvasSize()
@@ -548,7 +549,7 @@ let handleResize: (() => void) | null = null
 
 onMounted(async () => {
   await nextTick()
-  
+
   const routeId = route.query.id ? Number(route.query.id) : null
   if (routeId) {
     await routesStore.getRoutes()
@@ -556,7 +557,7 @@ onMounted(async () => {
     if (routeToEdit) {
       currentRoute.value = routeToEdit
       console.log('Route loaded:', routeToEdit.name, routeToEdit.data.grade)
-      
+
       if (routeToEdit.data?.problem?.holds) {
         routeToEdit.data.problem.holds.forEach((hold) => {
           if (hold.type === HoldType.start) {
@@ -570,19 +571,19 @@ onMounted(async () => {
       }
     }
   }
-  
+
   setTimeout(async () => {
     if (stage.value) {
       const konvaStage = stage.value.getNode()
       await initKonva()
-      
+
       setTimeout(() => {
         isWideScreen()
         updatePathColors()
       }, 50)
     }
   }, 100)
-  
+
   handleResize = () => {
     isWideScreen()
     // Update landscape orientation
@@ -600,7 +601,7 @@ onMounted(async () => {
       }
     }, 10)
   })
-  
+
   setTimeout(() => {
     if (observer) {
       if (box.value) {
@@ -611,7 +612,7 @@ onMounted(async () => {
       }
     }
   }, 100)
-  
+
   // Setup WebSocket for session mode
   if (isSessionRoute.value) {
     setupWebSocket()
@@ -651,7 +652,7 @@ function handlePathClick(pathId: string) {
   if (isPanMode.value) {
     togglePanMode()
   }
-  
+
   if (startMode.value) {
     handleStartSelection(pathId)
   } else if (endMode.value) {
@@ -664,7 +665,7 @@ function handlePathClick(pathId: string) {
 
 function handleStartSelection(pathId: string) {
   const index = selectedStarts.value.indexOf(pathId)
-  
+
   // If clicking an already selected start, deselect it
   if (index > -1) {
     selectedStarts.value.splice(index, 1)
@@ -675,14 +676,14 @@ function handleStartSelection(pathId: string) {
     updatePathColors()
     return
   }
-  
+
   // Remove from normal positions if it was selected as normal
   selectedNormalPositions.value.delete(pathId)
   // Remove from end position if it was selected as end
   if (selectedEnd.value === pathId) {
     selectedEnd.value = null
   }
-  
+
   // If no starts selected, add first start
   if (selectedStarts.value.length === 0) {
     selectedStarts.value.push(pathId)
@@ -707,7 +708,7 @@ function handleStartSelection(pathId: string) {
     }
     // Keep start mode active - user must manually turn it off
   }
-  
+
   updatePathColors()
 }
 
@@ -717,7 +718,7 @@ function handleEndSelection(pathId: string) {
     updatePathColors()
     return
   }
-  
+
   // Remove from normal positions if it was selected as normal
   selectedNormalPositions.value.delete(pathId)
   // Remove from start positions if it was selected as start
@@ -725,11 +726,11 @@ function handleEndSelection(pathId: string) {
   if (startIndex > -1) {
     selectedStarts.value.splice(startIndex, 1)
   }
-  
+
   selectedEnd.value = pathId
-  
+
   endMode.value = false
-  
+
   updatePathColors()
 }
 
@@ -737,15 +738,15 @@ function handleNormalSelection(pathId: string) {
   if (selectedStarts.value.includes(pathId) || selectedEnd.value === pathId) {
     return
   }
-  
+
   if (!stage.value || !mainLayer.value) return
-  
+
   const konvaStage = stage.value.getNode()
   const path = mainLayer.value.findOne(`#${pathId}`)
   if (!path) return
-  
+
   const isCurrentlySelected = selectedNormalPositions.value.has(pathId)
-  
+
   if (isCurrentlySelected) {
     selectedNormalPositions.value.delete(pathId)
     path.opacity(0.3)
@@ -753,23 +754,23 @@ function handleNormalSelection(pathId: string) {
     selectedNormalPositions.value.add(pathId)
     path.opacity(1)
   }
-  
+
   path.getLayer()?.batchDraw()
 }
 
 function updatePathColors() {
   if (!mainLayer.value || !stage.value) return
-  
+
   const konvaStage = stage.value.getNode()
   const children = mainLayer.value.children
   if (!children) return
-  
+
   children.forEach((node: any) => {
     const pathId = node.id()
     const isStart = selectedStarts.value.includes(pathId)
     const isEnd = selectedEnd.value === pathId
     const isNormalSelected = selectedNormalPositions.value.has(pathId)
-    
+
     if (isStart) {
       node.fill('green')
       node.opacity(1)
@@ -785,23 +786,23 @@ function updatePathColors() {
       }
     }
   })
-  
+
   konvaStage.draw()
 }
 
 // Pan and zoom functions
 function constrainPanOffset() {
   if (!mainLayer.value || !stage.value) return
-  
+
   const konvaStage = stage.value.getNode()
   const stageWidth = konvaStage.width()
   const stageHeight = konvaStage.height()
   const finalScale = baseScale.value * zoomScale.value
-  
+
   // Calculate the scaled SVG dimensions
   const scaledWidth = constants.WALL_WIDTH_MM * finalScale
   const scaledHeight = constants.WALL_HEIGHT_MM * finalScale
-  
+
   // Only constrain if the scaled SVG is larger than the stage (zoomed in)
   // If zoomed out, the SVG should stay centered
   if (scaledWidth <= stageWidth && scaledHeight <= stageHeight) {
@@ -809,29 +810,29 @@ function constrainPanOffset() {
     panOffset.value = { x: 0, y: 0 }
     return
   }
-  
+
   // When zoomed in, allow panning but keep at least 10% visible on each side
   const minVisibleWidth = scaledWidth * 0.1
   const minVisibleHeight = scaledHeight * 0.1
-  
+
   // The layer center position is: basePosition + panOffset
   // The layer left edge is: (basePosition.x + panOffset.x) - scaledWidth/2
   // The layer right edge is: (basePosition.x + panOffset.x) + scaledWidth/2
-  
+
   // We want the left edge to be at most minVisibleWidth off-screen to the left
   // So: (basePosition.x + panOffset.x) - scaledWidth/2 >= -minVisibleWidth
   // Solving for panOffset.x: panOffset.x >= -minVisibleWidth - basePosition.x + scaledWidth/2
   const minPanX = -minVisibleWidth - basePosition.value.x + scaledWidth / 2
-  
+
   // We want the right edge to be at most minVisibleWidth off-screen to the right
   // So: (basePosition.x + panOffset.x) + scaledWidth/2 <= stageWidth + minVisibleWidth
   // Solving for panOffset.x: panOffset.x <= stageWidth + minVisibleWidth - basePosition.x - scaledWidth/2
   const maxPanX = stageWidth + minVisibleWidth - basePosition.value.x - scaledWidth / 2
-  
+
   // Same for Y axis
   const minPanY = -minVisibleHeight - basePosition.value.y + scaledHeight / 2
   const maxPanY = stageHeight + minVisibleHeight - basePosition.value.y - scaledHeight / 2
-  
+
   // Only clamp if the range is valid (min < max)
   if (minPanX < maxPanX) {
     panOffset.value.x = Math.max(minPanX, Math.min(maxPanX, panOffset.value.x))
@@ -843,25 +844,25 @@ function constrainPanOffset() {
 
 function applyTransform() {
   if (!mainLayer.value || !stage.value) return
-  
+
   const konvaStage = stage.value.getNode()
   // Apply base scale * zoom scale
   const finalScale = baseScale.value * zoomScale.value
-  
+
   // Constrain pan offset before applying (only if not actively dragging to allow smooth panning)
   if (!isDragging.value) {
     constrainPanOffset()
   }
-  
+
   mainLayer.value.scale({ x: finalScale, y: finalScale })
-  
+
   // Apply base position + pan offset
   mainLayer.value.position({
     x: basePosition.value.x + panOffset.value.x,
     y: basePosition.value.y + panOffset.value.y,
   })
   konvaStage.draw()
-  
+
   // Redraw skeleton if in session mode (skeleton will be redrawn in animation loop)
 }
 
@@ -880,51 +881,51 @@ function handleZoomOut() {
 function handleReset() {
   disablePanMode()
   if (!mainLayer.value || !stage.value || !innerbox.value) return
-  
+
   const container = innerbox.value as HTMLElement
   const containerWidth = container.clientWidth
   const containerHeight = container.clientHeight
-  
+
   if (containerWidth === 0 || containerHeight === 0) {
     // Wait for container to be ready
     setTimeout(() => handleReset(), 50)
     return
   }
-  
+
   // Reset zoom and pan values first
   zoomScale.value = 1
   panOffset.value = { x: 0, y: 0 }
-  
+
   // Update configKonva to ensure reactive stage size is correct
   configKonva.value.width = containerWidth
   configKonva.value.height = containerHeight
-  
+
   // Wait for next tick to ensure Vue-Konva has updated the stage size
   nextTick(() => {
     if (!mainLayer.value || !stage.value) return
-    
+
     const updatedStage = stage.value.getNode()
-    
+
     // Ensure stage size matches container (in case Vue-Konva hasn't updated)
     if (updatedStage.width() !== containerWidth || updatedStage.height() !== containerHeight) {
       updatedStage.width(containerWidth)
       updatedStage.height(containerHeight)
     }
-    
+
     // Recalculate base scale and position by calling scaleLayer
     // This will center the SVG at stage.width()/2, stage.height()/2
     scaleLayer(mainLayer.value, updatedStage)
-    
+
     // Update base scale and position after scaleLayer
     baseScale.value = mainLayer.value.scaleX()
     basePosition.value = {
       x: mainLayer.value.x(),
       y: mainLayer.value.y(),
     }
-    
+
     // Ensure pan offset is still 0
     panOffset.value = { x: 0, y: 0 }
-    
+
     // Apply transform - this will position the layer at basePosition (centered)
     applyTransform()
   })
@@ -956,50 +957,50 @@ function disablePanMode() {
 function handleWheel(e: WheelEvent) {
   e.preventDefault()
   if (!stage.value || !mainLayer.value) return
-  
+
   const konvaStage = stage.value.getNode()
   const stageBox = konvaStage.container().getBoundingClientRect()
   const pointer = {
     x: e.clientX - stageBox.left,
     y: e.clientY - stageBox.top,
   }
-  
+
   const oldZoom = zoomScale.value
   const delta = e.deltaY > 0 ? 0.9 : 1.1
   zoomScale.value = Math.max(minZoom, Math.min(zoomScale.value * delta, maxZoom))
-  
+
   // Calculate zoom point in layer coordinates
   const layerPoint = {
     x: (pointer.x - basePosition.value.x - panOffset.value.x) / (baseScale.value * oldZoom),
     y: (pointer.y - basePosition.value.y - panOffset.value.y) / (baseScale.value * oldZoom),
   }
-  
+
   // Adjust pan offset to keep the zoom point under the mouse
   panOffset.value = {
     x: pointer.x - layerPoint.x * (baseScale.value * zoomScale.value) - basePosition.value.x,
     y: pointer.y - layerPoint.y * (baseScale.value * zoomScale.value) - basePosition.value.y,
   }
-  
+
   applyTransform()
 }
 
 function handleMouseDown(e: MouseEvent) {
   if (!isPanMode.value || !stage.value || !mainLayer.value) return
-  
+
   // Only pan with left mouse button
   if (e.button !== 0) return
-  
+
   // Check if clicking on a path - if so, don't pan
   const konvaStage = stage.value.getNode()
   const pointer = konvaStage.getPointerPosition()
   if (!pointer) return
-  
+
   const clickedOnShape = konvaStage.getIntersection(pointer)
   if (clickedOnShape && clickedOnShape !== konvaStage && clickedOnShape !== mainLayer.value) {
     // Clicked on a shape (path), let the normal click handler work
     return
   }
-  
+
   isDragging.value = true
   const stageBox = konvaStage.container().getBoundingClientRect()
   lastPointerPosition.value = {
@@ -1012,23 +1013,23 @@ function handleMouseDown(e: MouseEvent) {
 
 function handleMouseMove(e: MouseEvent) {
   if (!isPanMode.value || !isDragging.value || !stage.value || !mainLayer.value) return
-  
+
   const konvaStage = stage.value.getNode()
   const stageBox = konvaStage.container().getBoundingClientRect()
   const newPointerPosition = {
     x: e.clientX - stageBox.left,
     y: e.clientY - stageBox.top,
   }
-  
+
   const dx = newPointerPosition.x - lastPointerPosition.value.x
   const dy = newPointerPosition.y - lastPointerPosition.value.y
-  
+
   // Update pan offset to move the layer (not the stage)
   panOffset.value = {
     x: panOffset.value.x + dx,
     y: panOffset.value.y + dy,
   }
-  
+
   lastPointerPosition.value = newPointerPosition
   applyTransform()
   e.preventDefault()
@@ -1046,34 +1047,34 @@ function handleMouseUp() {
 
 async function initKonva() {
   if (!stage.value) return
-  
+
   const konvaStage = stage.value.getNode()
   mainLayer.value = await loadWallSvg(
     handlePathClick,
     selectedStarts.value,
     selectedEnd.value
   )
-  
+
   // Wait for next tick to ensure stage is fully initialized
   await nextTick()
-  
+
   scaleLayer(mainLayer.value, konvaStage)
-  
+
   // Store base scale and position after scaleLayer
   baseScale.value = mainLayer.value.scaleX()
   basePosition.value = {
     x: mainLayer.value.x(),
     y: mainLayer.value.y(),
   }
-  
+
   konvaStage.add(mainLayer.value)
-  
+
   // Initialize transform before drawing to prevent jump
   zoomScale.value = 1
   panOffset.value = { x: 0, y: 0 }
   applyTransform()
   konvaStage.draw()
-  
+
   // Attach event listeners to the stage container
   const container = konvaStage.container()
   container.addEventListener('wheel', handleWheel, { passive: false })
@@ -1086,32 +1087,32 @@ async function initKonva() {
 // Skeleton drawing functions
 function setupWebSocket() {
   if (!isSessionRoute.value) return
-  
+
   const wsUrl = 'wss://climber.dev.maptnh.net/ws/holds/'
-  
+
   // Don't disconnect if already connected to the same URL - just reuse the connection
   // Only disconnect if we need to change endpoints
-  
+
   // Clear any existing reconnect timeout
   if (reconnectTimeout !== null) {
     clearTimeout(reconnectTimeout)
     reconnectTimeout = null
   }
-  
+
   reconnectAttempts = 0
-  
+
   const connectWebSocket = () => {
     try {
       websocketService.connect(wsUrl)
-      
+
       // Subscribe to WebSocket messages for pose data
       wsUnsubscribe = websocketService.subscribe((data: any) => {
         // Process immediately without blocking - use microtask for debug logging
         const now = performance.now()
-        
+
         // Parse landmarks first (fast path)
         let landmarks: any[] | null = null
-        
+
         if (Array.isArray(data)) {
           landmarks = data
         } else if (data?.landmarks) {
@@ -1119,23 +1120,23 @@ function setupWebSocket() {
         } else if (data?.pose_landmarks) {
           landmarks = Array.isArray(data.pose_landmarks) ? data.pose_landmarks : null
         }
-        
+
         // Update data immediately if valid
         if (landmarks && landmarks.length > 0) {
           // Store latest landmarks
           lastPoseData.value = landmarks
-          
+
           // Add to buffer for smooth interpolation
           poseBuffer.push({
             landmarks: landmarks,
             timestamp: now
           })
-          
+
           // Keep buffer size limited
           if (poseBuffer.length > BUFFER_SIZE) {
             poseBuffer.shift()
           }
-          
+
           // Start continuous animation loop if not already running
           if (!isSkeletonLoopRunning) {
             isSkeletonLoopRunning = true
@@ -1145,7 +1146,7 @@ function setupWebSocket() {
             skeletonAnimationLoop()
           }
         }
-        
+
         // Debug tracking (async to not block message processing)
         if (DEBUG_SKELETON) {
           // Use setTimeout with 0 delay to defer debug work
@@ -1154,12 +1155,12 @@ function setupWebSocket() {
             const timeSinceLastMessage = wsLastMessageTime > 0 ? now - wsLastMessageTime : 0
             wsLastMessageTime = now
             wsMessageTimes.push(timeSinceLastMessage)
-            
+
             // Keep only last 60 timings (about 1 second at 60fps)
             if (wsMessageTimes.length > 60) {
               wsMessageTimes.shift()
             }
-            
+
             // Log stats every 30 messages
             if (wsMessageCount % 30 === 0) {
               const avgTime = wsMessageTimes.reduce((a, b) => a + b, 0) / wsMessageTimes.length
@@ -1176,7 +1177,7 @@ function setupWebSocket() {
                 isArray: Array.isArray(data),
                 bufferSize: poseBuffer.length,
               })
-              
+
               if (landmarks && landmarks.length > 0) {
                 console.log('[Skeleton Debug] Landmarks received:', {
                   count: landmarks.length,
@@ -1190,7 +1191,7 @@ function setupWebSocket() {
           }, 0)
         }
       })
-      
+
       // Reset reconnect attempts on successful connection
       reconnectAttempts = 0
     } catch (error) {
@@ -1198,7 +1199,7 @@ function setupWebSocket() {
       attemptReconnect(wsUrl)
     }
   }
-  
+
   // Initial connection attempt
   setTimeout(() => {
     connectWebSocket()
@@ -1213,25 +1214,25 @@ function attemptReconnect(wsUrl: string) {
     }
     return
   }
-  
+
   // Clear any existing reconnect timeout
   if (reconnectTimeout !== null) {
     clearTimeout(reconnectTimeout)
     reconnectTimeout = null
   }
-  
+
   reconnectAttempts++
   const delay = Math.min(2000 * reconnectAttempts, 10000) // Longer delays, max 10s
-  
+
   if (DEBUG_SKELETON) {
     console.log(`[Skeleton Debug] Reconnecting attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} in ${delay}ms`)
   }
-  
+
   reconnectTimeout = window.setTimeout(() => {
     if (!isSessionRoute.value) {
       return // Don't reconnect if we've left session mode
     }
-    
+
     // Only reconnect if socket is actually closed
     try {
       websocketService.connect(wsUrl)
@@ -1248,11 +1249,11 @@ function updateSkeletonCanvasSize() {
     skeletonCtx = null
     return
   }
-  
+
   const container = innerbox.value as HTMLElement
   const containerWidth = container.clientWidth
   const containerHeight = container.clientHeight
-  
+
   if (containerWidth > 0 && containerHeight > 0) {
     skeletonCanvas.value.width = containerWidth
     skeletonCanvas.value.height = containerHeight
@@ -1267,15 +1268,15 @@ function interpolateLandmarks(frame1: any[], frame2: any[], t: number): any[] {
   if (!frame1 || !frame2 || frame1.length !== frame2.length) {
     return frame1 || frame2 || []
   }
-  
+
   return frame1.map((lm1: any, i: number) => {
     const lm2 = frame2[i]
     return {
       x: (lm1.x || 0) + ((lm2.x || 0) - (lm1.x || 0)) * t,
       y: (lm1.y || 0) + ((lm2.y || 0) - (lm1.y || 0)) * t,
       z: (lm1.z || 0) + ((lm2.z || 0) - (lm1.z || 0)) * t,
-      visibility: (lm1.visibility !== undefined ? lm1.visibility : 1) + 
-                  ((lm2.visibility !== undefined ? lm2.visibility : 1) - 
+      visibility: (lm1.visibility !== undefined ? lm1.visibility : 1) +
+                  ((lm2.visibility !== undefined ? lm2.visibility : 1) -
                    (lm1.visibility !== undefined ? lm1.visibility : 1)) * t,
     }
   })
@@ -1283,7 +1284,7 @@ function interpolateLandmarks(frame1: any[], frame2: any[], t: number): any[] {
 
 function getInterpolatedPose(): any[] | null {
   const now = performance.now()
-  
+
   // Clean up stale frames from buffer
   while (poseBuffer.length > 0) {
     const oldestFrame = poseBuffer[0]
@@ -1293,11 +1294,11 @@ function getInterpolatedPose(): any[] | null {
       break
     }
   }
-  
+
   if (poseBuffer.length === 0) {
     return lastPoseData.value
   }
-  
+
   if (poseBuffer.length === 1) {
     const frame = poseBuffer[0]
     // If frame is too old, don't use it
@@ -1306,32 +1307,32 @@ function getInterpolatedPose(): any[] | null {
     }
     return frame.landmarks || lastPoseData.value
   }
-  
+
   // Get the two most recent frames
   const frame1 = poseBuffer[poseBuffer.length - 2]
   const frame2 = poseBuffer[poseBuffer.length - 1]
-  
+
   if (!frame1 || !frame2) {
     return lastPoseData.value
   }
-  
+
   // If frames are too old, just use the latest
   if (now - frame2.timestamp > MAX_FRAME_AGE) {
     return frame2.landmarks
   }
-  
+
   // Calculate interpolation factor based on time since last frame
   const timeSinceFrame1 = now - frame1.timestamp
   const timeBetweenFrames = frame2.timestamp - frame1.timestamp
-  
+
   if (timeBetweenFrames <= 0) {
     return frame2.landmarks
   }
-  
+
   // Interpolate between frames (0 = frame1, 1 = frame2)
   // Clamp t to prevent extrapolation beyond frame2
   const t = Math.min(1, Math.max(0, timeSinceFrame1 / timeBetweenFrames))
-  
+
   return interpolateLandmarks(frame1.landmarks, frame2.landmarks, t)
 }
 
@@ -1339,29 +1340,29 @@ function transformLandmarks(landmarks: any[]): any[] {
   if (!mainLayer.value || !stage.value || !skeletonCanvas.value) {
     return []
   }
-  
+
   const konvaStage = stage.value.getNode()
   const canvas = skeletonCanvas.value
   const finalScale = baseScale.value * zoomScale.value
-  
+
   // Calculate the scaled SVG dimensions
   const scaledWidth = constants.WALL_WIDTH_MM * finalScale
   const scaledHeight = constants.WALL_HEIGHT_MM * finalScale
-  
+
   // Calculate layer position
   const layerX = basePosition.value.x + panOffset.value.x
   const layerY = basePosition.value.y + panOffset.value.y
-  
+
   // Calculate layer bounds
   const leftEdge = layerX - scaledWidth / 2
   const topEdge = layerY - scaledHeight / 2
-  
+
   // Transform landmarks from normalized wall coordinates (0-1) to canvas coordinates (0-1)
   return landmarks.map((lm: any) => {
     // Convert from normalized wall coordinates to pixel coordinates in the layer
     const pixelX = leftEdge + (lm.x * scaledWidth)
     const pixelY = topEdge + (lm.y * scaledHeight)
-    
+
     // Normalize to canvas coordinates (0-1) for MediaPipe drawing utilities
     return {
       x: pixelX / canvas.width,
@@ -1374,13 +1375,13 @@ function transformLandmarks(landmarks: any[]): any[] {
 
 function drawSkeleton(landmarks: any[]) {
   const drawStartTime = performance.now()
-  
+
   if (!skeletonCanvas.value || !landmarks || landmarks.length === 0 || !skeletonCtx) {
     return
   }
-  
+
   const canvas = skeletonCanvas.value
-  
+
   // Ensure canvas is properly sized and context is cached
   if (canvas.width === 0 || canvas.height === 0) {
     updateSkeletonCanvasSize()
@@ -1388,24 +1389,24 @@ function drawSkeleton(landmarks: any[]) {
       return
     }
   }
-  
+
   const ctx = skeletonCtx
-  
+
   // Transform landmarks to canvas coordinates
   const transformStartTime = performance.now()
   const transformedLandmarks = transformLandmarks(landmarks)
   const transformTime = performance.now() - transformStartTime
-  
+
   if (transformedLandmarks.length === 0) {
     return
   }
-  
+
   // Clear canvas
   const clearStartTime = performance.now()
   ctx.save()
   ctx.clearRect(0, 0, canvas.width, canvas.height)
   const clearTime = performance.now() - clearStartTime
-  
+
   // Draw pose connections using custom connections to ensure arms connect correctly
   const drawConnectorsStartTime = performance.now()
   drawConnectors(ctx, transformedLandmarks, CUSTOM_POSE_CONNECTIONS, {
@@ -1413,7 +1414,7 @@ function drawSkeleton(landmarks: any[]) {
     lineWidth: 4,
   })
   const drawConnectorsTime = performance.now() - drawConnectorsStartTime
-  
+
   // Draw pose landmarks using MediaPipe utilities
   const drawLandmarksStartTime = performance.now()
   drawLandmarks(ctx, transformedLandmarks, {
@@ -1422,9 +1423,9 @@ function drawSkeleton(landmarks: any[]) {
     radius: 5,
   })
   const drawLandmarksTime = performance.now() - drawLandmarksStartTime
-  
+
   ctx.restore()
-  
+
   // Track drawing performance
   if (DEBUG_SKELETON) {
     const totalDrawTime = performance.now() - drawStartTime
@@ -1432,19 +1433,19 @@ function drawSkeleton(landmarks: any[]) {
     const timeSinceLastDraw = lastDrawTime > 0 ? drawStartTime - lastDrawTime : 0
     lastDrawTime = drawStartTime
     drawTimes.push(totalDrawTime)
-    
+
     // Keep only last 60 timings
     if (drawTimes.length > 60) {
       drawTimes.shift()
     }
-    
+
     // Log stats every 60 draws (about 1 second at 60fps)
     if (drawCount % 60 === 0) {
       const avgDrawTime = drawTimes.reduce((a, b) => a + b, 0) / drawTimes.length
       const maxDrawTime = Math.max(...drawTimes)
       const avgInterval = timeSinceLastDraw > 0 ? timeSinceLastDraw : 0
       const drawFPS = avgInterval > 0 ? (1000 / avgInterval).toFixed(1) : 'N/A'
-      
+
       console.log('[Skeleton Debug] Drawing Performance:', {
         drawCount,
         avgDrawTime: `${avgDrawTime.toFixed(2)}ms`,
@@ -1462,13 +1463,13 @@ function drawSkeleton(landmarks: any[]) {
 
 function skeletonAnimationLoop() {
   if (!isSkeletonLoopRunning) return
-  
+
   const loopStartTime = performance.now()
-  
+
   // Always continue the loop, even if no data
   // Get interpolated pose data from buffer for smooth animation
   const interpolatedPose = getInterpolatedPose()
-  
+
   if (interpolatedPose && interpolatedPose.length > 0) {
     drawSkeleton(interpolatedPose)
   } else {
@@ -1479,17 +1480,17 @@ function skeletonAnimationLoop() {
       console.warn('[Skeleton Debug] Animation loop running but no pose data available')
     }
   }
-  
+
   const loopTime = performance.now() - loopStartTime
-  
+
   // Track loop performance
   if (DEBUG_SKELETON && drawCount % 300 === 0) {
     const now = performance.now()
-    const lastFrameTime = poseBuffer.length > 0 
-      ? poseBuffer[poseBuffer.length - 1]?.timestamp || 0 
+    const lastFrameTime = poseBuffer.length > 0
+      ? poseBuffer[poseBuffer.length - 1]?.timestamp || 0
       : 0
     const timeSinceLastFrame = now - lastFrameTime
-    
+
     console.log('[Skeleton Debug] Animation loop:', {
       loopTime: `${loopTime.toFixed(2)}ms`,
       hasPoseData: !!interpolatedPose,
@@ -1498,7 +1499,7 @@ function skeletonAnimationLoop() {
       isRunning: isSkeletonLoopRunning,
     })
   }
-  
+
   // Always continue the loop - never stop it
   skeletonAnimationFrame = requestAnimationFrame(() => {
     skeletonAnimationLoop()
@@ -1567,7 +1568,7 @@ function skeletonAnimationLoop() {
   .route-edit-container.box.session-route .canvas-container {
     max-height: calc(100vh - 180px) !important;
   }
-  
+
   :deep(canvas) {
     touch-action: none;
     -webkit-touch-callout: none;
@@ -1669,11 +1670,11 @@ function skeletonAnimationLoop() {
     max-width: calc(100vw - 32px);
     z-index: 999;
   }
-  
+
   .route-info-content {
     gap: 10px;
   }
-  
+
   .route-name {
     font-size: 14px;
     max-width: 200px;
@@ -1689,7 +1690,7 @@ function skeletonAnimationLoop() {
     top: auto;
     padding: 12px 18px;
   }
-  
+
   .route-name {
     font-size: 15px;
     max-width: 250px;

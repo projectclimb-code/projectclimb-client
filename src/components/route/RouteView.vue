@@ -135,7 +135,7 @@ onBeforeUnmount(() => {
   if (observer) observer.disconnect()
   if (videoRef.value) {
     videoRef.value.pause()
-    if (isActiveVideo(props.route.id)) {
+    if (props.route?.id && isActiveVideo(props.route.id)) {
       clearActiveVideo()
     }
     videoRef.value = null
@@ -143,7 +143,7 @@ onBeforeUnmount(() => {
 })
 
 function editRoute(path: string) {
-  router.push({ path, query: { id: props.route.id } })
+  router.push({ path, query: { id: props.route?.id } })
 }
 
 function preview() {
@@ -187,7 +187,7 @@ async function toggleVideo(event: Event) {
 
 function onVideoEnded() {
   isPlaying.value = false
-  if (isActiveVideo(props.route.id)) {
+  if (props.route?.id && isActiveVideo(props.route.id)) {
     clearActiveVideo()
   }
 }
