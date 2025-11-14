@@ -155,12 +155,12 @@ function createRoute() {
 
 .p-input-icon-right i {
   position: absolute;
-  right: 1rem;
+  right: 0.75rem;
   top: 50%;
   transform: translateY(-50%);
   color: #6b7280;
   pointer-events: none;
-  z-index: 1;
+  z-index: 2;
 }
 
 .grade-filter-dropdown {
@@ -218,7 +218,7 @@ function createRoute() {
 }
 
 :deep(.grade-filter-dropdown .p-dropdown-label) {
-  padding-right: 2.5rem;
+  padding-right: 3rem;
 }
 
 :deep(.grade-filter-dropdown .p-dropdown-panel) {

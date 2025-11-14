@@ -83,6 +83,10 @@ onMounted(() => {
         canvasElement.width,
         canvasElement.height
       )
+    } else {
+      // If no image, fill with black background
+      canvasCtx.fillStyle = '#000000'
+      canvasCtx.fillRect(0, 0, canvasElement.width, canvasElement.height)
     }
     
     // Draw pose landmarks

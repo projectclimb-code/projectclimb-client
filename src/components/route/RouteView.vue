@@ -162,8 +162,11 @@ function preview() {
   // }
 }
 
-async function toggleVideo(event: Event) {
-  event.stopPropagation()
+async function toggleVideo(event?: Event) {
+  if (event) {
+    event.stopPropagation()
+  }
+  
   if (!videoRef.value || !props.route.id) {
     console.warn('Video ref or route ID not available')
     return
@@ -179,6 +182,13 @@ async function toggleVideo(event: Event) {
       setActiveVideo(props.route.id, videoRef.value)
       await videoRef.value.play()
       isPlaying.value = true
+      
+          // Send preview message
+          isHighlighted.value = true
+          websocketService.sendPreview(props.route)
+      setTimeout(() => {
+        isHighlighted.value = false
+      }, 300)
     }
   } catch (error) {
     console.error('Error toggling video:', error)
@@ -345,8 +355,8 @@ function updatePathColors() {
       node.strokeWidth(8)
     } else {
       node.fill('white')
-      node.opacity(0.6)
-      node.strokeWidth(5)
+      node.opacity(0.25)
+      node.strokeWidth(2)
     }
   })
 
@@ -401,7 +411,7 @@ watch(() => props.route.data?.problem?.holds, () => {
         class="overflow-hidden bg-white rounded-[16px] relative route-card cursor-pointer"
         :class="{ 'route-card-highlighted': isHighlighted, 'route-card-playing': isPlaying }"
         style="box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px; position: relative; width: 100%; height: 100%;"
-        @click="preview()"
+        @click="toggleVideo()"
       >
         <div
           ref="innerbox"
@@ -418,8 +428,8 @@ watch(() => props.route.data?.problem?.holds, () => {
             v-if="hasVideo && videoSrc"
             ref="videoRef"
             :src="videoSrc"
-            class="absolute"
-            :style="{ opacity: isPlaying ? 0.3 : 0.5, zIndex: 2, pointerEvents: 'none', ...videoStyle, objectFit: 'contain' }"
+            class="absolute route-video"
+            :style="{ opacity: isPlaying ? 0.2 : 0.3, zIndex: 2, pointerEvents: 'none', ...videoStyle, objectFit: 'contain' }"
             @ended="onVideoEnded"
             @pause="onVideoPaused"
             @error="onVideoError"
@@ -621,6 +631,15 @@ $primary-color: #000;
 
 .route-action-button:active {
   transform: scale(0.95);
+}
+
+.route-video {
+  background-color: transparent;
+  mix-blend-mode: normal;
+}
+
+.route-video::-webkit-media-controls {
+  display: none !important;
 }
 
 </style>
