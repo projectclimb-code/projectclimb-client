@@ -60,6 +60,70 @@
       <i :class="item.icon"></i>
     </button>
   </div>
+
+  <!-- Session Action Bar for Tablet and Desktop -->
+  <div v-if="!isMobile && isSessionRoute" class="action-bar">
+    <Button
+      :icon="'pi pi-refresh'"
+      class="action-bar-button"
+      @click="$emit('restart')"
+      v-tooltip.left="'Restart'"
+      rounded
+    />
+    <Button
+      :icon="'pi pi-replay'"
+      class="action-bar-button"
+      @click="$emit('relay')"
+      v-tooltip.left="'Relay'"
+      rounded
+    />
+    <Button
+      :icon="'pi pi-pause'"
+      class="action-bar-button"
+      @click="$emit('pause')"
+      v-tooltip.left="'Pause'"
+      rounded
+    />
+  </div>
+
+  <!-- Mobile Session Action Bar -->
+  <div v-if="isMobile && isSessionRoute" class="mobile-action-bar">
+    <button
+      v-for="item in sessionMobileActionItems"
+      :key="item.label"
+      class="mobile-action-btn"
+      @click="item.command()"
+      :title="item.tooltip"
+    >
+      <i :class="item.icon"></i>
+    </button>
+  </div>
+
+  <!-- Recording Button for Session (Desktop/Tablet) -->
+  <div v-if="!isMobile && isSessionRoute" class="recording-button-container">
+    <button
+      class="recording-button-camera"
+      :class="{ 'recording': isRecording }"
+      @click="$emit('toggleRecording')"
+    >
+      <span v-if="!isRecording" class="recording-button-inner"></span>
+      <span v-else class="recording-button-stop"></span>
+    </button>
+    <div v-if="isRecording" class="recording-timer-display">{{ recordingTime }}</div>
+  </div>
+
+  <!-- Recording Button for Session (Mobile) -->
+  <div v-if="isMobile && isSessionRoute" class="recording-button-container-mobile">
+    <button
+      class="recording-button-camera-mobile"
+      :class="{ 'recording': isRecording }"
+      @click="$emit('toggleRecording')"
+    >
+      <span v-if="!isRecording" class="recording-button-inner-mobile"></span>
+      <span v-else class="recording-button-stop-mobile"></span>
+    </button>
+    <div v-if="isRecording" class="recording-timer-display-mobile">{{ recordingTime }}</div>
+  </div>
 </template>
 
 <script lang="ts" setup>
@@ -71,6 +135,8 @@ const props = defineProps<{
   isSessionRoute: boolean
   startMode: boolean
   endMode: boolean
+  isRecording?: boolean
+  recordingTime?: string
 }>()
 
 const emit = defineEmits<{
@@ -80,6 +146,10 @@ const emit = defineEmits<{
   flip: []
   start: []
   end: []
+  restart: []
+  relay: []
+  pause: []
+  toggleRecording: []
 }>()
 
 const mobileActionItems = computed(() => [
@@ -124,6 +194,27 @@ const mobileActionItems = computed(() => [
     command: () => emit('flip'),
     tooltip: 'Flip',
     class: '',
+  },
+])
+
+const sessionMobileActionItems = computed(() => [
+  {
+    label: 'Restart',
+    icon: 'pi pi-refresh',
+    command: () => emit('restart'),
+    tooltip: 'Restart',
+  },
+  {
+    label: 'Relay',
+    icon: 'pi pi-replay',
+    command: () => emit('relay'),
+    tooltip: 'Relay',
+  },
+  {
+    label: 'Pause',
+    icon: 'pi pi-pause',
+    command: () => emit('pause'),
+    tooltip: 'Pause',
   },
 ])
 </script>
@@ -312,6 +403,167 @@ const mobileActionItems = computed(() => [
   .mobile-action-btn.mobile-action-start i { color: #fff !important; }
   .mobile-action-btn.mobile-action-end { background: #ef4444 !important; }
   .mobile-action-btn.mobile-action-end i { color: #fff !important; }
+}
+
+/* Recording Button - Camera App Style (Desktop/Tablet) */
+.recording-button-container {
+  position: absolute;
+  left: 20px;
+  bottom: 110px; /* Above bottom menu (90px height + 20px padding) */
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.75rem;
+  z-index: 1001; /* Above bottom menu (z-index: 1000) */
+}
+
+.recording-button-camera {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  background: white;
+  border: 3px solid rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  transition: box-shadow 0.2s ease, opacity 0.2s ease;
+  position: relative;
+  transform-origin: center;
+  will-change: box-shadow;
+  flex-shrink: 0;
+}
+
+.recording-button-camera:hover {
+  box-shadow: 0 6px 25px rgba(0, 0, 0, 0.4);
+}
+
+.recording-button-camera:active {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  opacity: 0.9;
+}
+
+.recording-button-inner {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: #ef4444;
+  transition: all 0.3s ease;
+}
+
+.recording-button-stop {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 3px;
+  background: white;
+  transition: all 0.3s ease;
+}
+
+.recording-button-camera.recording {
+  background: #ef4444;
+  border-color: rgba(239, 68, 68, 0.8);
+  animation: recordingPulse 2s ease-in-out infinite;
+}
+
+.recording-timer-display {
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  font-family: 'Courier New', monospace;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+  white-space: nowrap;
+}
+
+@keyframes recordingPulse {
+  0%, 100% {
+    box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    box-shadow: 0 4px 30px rgba(239, 68, 68, 0.7);
+  }
+}
+
+/* Recording Button - Mobile */
+.recording-button-container-mobile {
+  position: fixed;
+  bottom: 100px; /* Above bottom menu (80px height + 20px padding) */
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  z-index: 1001; /* Above bottom menu (z-index: 1000) */
+}
+
+.recording-button-camera-mobile {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  background: white;
+  border: 2.5px solid rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  transition: box-shadow 0.2s ease, opacity 0.2s ease;
+  transform-origin: center;
+  will-change: box-shadow;
+  flex-shrink: 0;
+}
+
+.recording-button-camera-mobile:active {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  opacity: 0.9;
+}
+
+.recording-button-inner-mobile {
+  width: 1.875rem;
+  height: 1.875rem;
+  border-radius: 50%;
+  background: #ef4444;
+  transition: all 0.3s ease;
+}
+
+.recording-button-stop-mobile {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 2px;
+  background: white;
+  transition: all 0.3s ease;
+}
+
+.recording-button-camera-mobile.recording {
+  background: #ef4444;
+  border-color: rgba(239, 68, 68, 0.8);
+  animation: recordingPulse 2s ease-in-out infinite;
+}
+
+.recording-timer-display-mobile {
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  font-family: 'Courier New', monospace;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+  white-space: nowrap;
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .recording-button-container {
+    left: 50%;
+    bottom: 115px; /* Above bottom menu (85px height + 30px padding) */
+    transform: translateX(-50%);
+  }
 }
 </style>
 

@@ -89,8 +89,7 @@ defineExpose({
       cameraInstance = new Camera(videoElement, {
         onFrame: async () => {
           if (poseInstance && videoElement) {
-            const rawVideo = toRaw(videoElement)
-            await poseInstance.send({ image: rawVideo })
+            await poseInstance.send({ image: toRaw(videoElement) })
           }
         },
         width: 640,

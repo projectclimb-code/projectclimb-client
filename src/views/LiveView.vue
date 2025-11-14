@@ -17,12 +17,23 @@
         ref="cameraFeedRef"
         @ready="handleCameraReady"
       />
+      <!-- Recording Button -->
+      <div class="recording-indicator" :class="{ 'recording': isRecording }">
+        <button
+          class="recording-button"
+          @click="toggleRecording"
+        >
+          <span class="recording-dot"></span>
+          <span class="recording-text">rec...</span>
+          <span class="recording-timer">{{ recordingTime }}</span>
+        </button>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import CameraControls from '@/components/live/CameraControls.vue'
 import CameraFeed from '@/components/live/CameraFeed.vue'
 import type { Pose } from '@mediapipe/pose'
@@ -41,63 +52,48 @@ const currentStream = ref<MediaStream | null>(null)
 const isLoading = ref(true)
 let poseInstance: Pose | null = null
 
-onMounted(() => {
-  // Check if navigator is available
-  if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    console.error('getUserMedia is not supported')
+// Recording state
+const isRecording = ref(false)
+const recordingTime = ref('00:00')
+let recordingInterval: number | null = null
+let recordingStartTime = 0
+
+onMounted(async () => {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    console.error('Camera not supported')
+    isLoading.value = false
     return
   }
   
-  // Check if mobile
-  const userAgent = navigator.userAgent || ''
-  isMobile.value = window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent)
+  isMobile.value = window.innerWidth < 768
   
   // Enumerate cameras
-  const enumerateCameras = async () => {
-    try {
-      if (!isMobile.value && navigator.mediaDevices) {
-        try {
-          const tempStream = await navigator.mediaDevices.getUserMedia({ video: true })
-          tempStream.getTracks().forEach(track => track.stop())
-        } catch (err) {
-          console.warn('Could not request camera permission:', err)
-        }
-      }
-      
-      if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-        const devices = await navigator.mediaDevices.enumerateDevices()
-        devices.forEach((device) => {
-          if (device.kind === 'videoinput') {
-            cameras.value.push({
-              name: device.label || `Camera ${cameras.value.length + 1}`,
-              code: device.deviceId,
-            })
-          }
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices()
+    devices.forEach((device) => {
+      if (device.kind === 'videoinput') {
+        cameras.value.push({
+          name: device.label || `Camera ${cameras.value.length + 1}`,
+          code: device.deviceId,
         })
       }
-    } catch (err) {
-      console.error('Error enumerating cameras:', err)
-    }
+    })
+  } catch (err) {
+    console.warn('Could not enumerate cameras:', err)
   }
   
-  enumerateCameras()
-  
-  // Start camera after a short delay
-  setTimeout(() => {
+  // Start camera
+  nextTick(() => {
     if (isMobile.value) {
       startCamera('user')
     } else {
-      const firstCamera = cameras.value[0]
-      if (firstCamera) {
-        startCamera(firstCamera.code)
-      } else {
-        startCamera('default')
-      }
+      startCamera('default')
     }
-  }, 500)
+  })
 })
 
 onBeforeUnmount(() => {
+  stopRecording()
   stopCamera()
   if (cameraFeedRef.value) {
     const videoElement = cameraFeedRef.value.video
@@ -124,78 +120,36 @@ function stopCamera() {
 }
 
 function startCamera(deviceIdOrFacingMode: string) {
-  const videoElement = cameraFeedRef.value?.video
-  if (!videoElement) return
-  
-  if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    console.error('getUserMedia is not supported')
+  if (!cameraFeedRef.value?.video) {
+    nextTick(() => startCamera(deviceIdOrFacingMode))
     return
   }
   
   stopCamera()
   
-  let constraints: MediaStreamConstraints
+  const constraints: MediaStreamConstraints = isMobile.value
+    ? { video: { facingMode: (deviceIdOrFacingMode === 'user' || deviceIdOrFacingMode === 'environment') ? deviceIdOrFacingMode as 'user' | 'environment' : 'user' }, audio: false }
+    : deviceIdOrFacingMode === 'default'
+    ? { video: true, audio: false }
+    : { video: { deviceId: { exact: deviceIdOrFacingMode } }, audio: false }
   
   if (isMobile.value) {
-    if (deviceIdOrFacingMode === 'user' || deviceIdOrFacingMode === 'environment') {
-      constraints = {
-        video: { facingMode: deviceIdOrFacingMode as 'user' | 'environment' },
-        audio: false,
-      }
-      isUsingFrontCamera.value = deviceIdOrFacingMode === 'user'
-    } else {
-      constraints = {
-        video: { facingMode: 'user' },
-        audio: false,
-      }
-      isUsingFrontCamera.value = true
-    }
-  } else {
-    if (deviceIdOrFacingMode === 'default') {
-      constraints = {
-        video: true,
-        audio: false,
-      }
-    } else {
-      constraints = {
-        video: { deviceId: { exact: deviceIdOrFacingMode } },
-        audio: false,
-      }
-    }
+    isUsingFrontCamera.value = deviceIdOrFacingMode === 'user'
   }
   
   navigator.mediaDevices
     .getUserMedia(constraints)
     .then((stream) => {
       currentStream.value = stream
+      const videoElement = cameraFeedRef.value?.video
       if (videoElement) {
-        // Stop any existing playback first
-        videoElement.pause()
-        videoElement.srcObject = null
-        
-        // Wait a bit before setting new stream
-        setTimeout(() => {
-          if (videoElement) {
-            videoElement.srcObject = stream
-            // Wait for video to be ready before playing
-            videoElement.onloadedmetadata = () => {
-              videoElement.play().catch((err) => {
-                // Ignore AbortError - it's expected when switching cameras
-                if (err.name !== 'AbortError') {
-                  console.error('Error playing video:', err)
-                }
-              })
-            }
-          }
-        }, 100)
+        videoElement.srcObject = stream
+        videoElement.play().catch(console.error)
       }
       
-      // Restart MediaPipe Camera with new stream after a delay
-      setTimeout(() => {
-        if (cameraFeedRef.value) {
-          cameraFeedRef.value.restartCamera()
-        }
-      }, 300)
+      if (cameraFeedRef.value) {
+        cameraFeedRef.value.restartCamera()
+      }
       
       if (!isMobile.value && deviceIdOrFacingMode !== 'default') {
         const camera = cameras.value.find(cam => cam.code === deviceIdOrFacingMode)
@@ -205,7 +159,8 @@ function startCamera(deviceIdOrFacingMode: string) {
       }
     })
     .catch((err) => {
-      console.error('Error accessing camera:', err)
+      console.error('Camera error:', err.name, err.message)
+      isLoading.value = false
     })
 }
 
@@ -229,6 +184,35 @@ function flipCamera() {
       }
     }
   }
+}
+
+function toggleRecording() {
+  if (isRecording.value) {
+    stopRecording()
+  } else {
+    startRecording()
+  }
+}
+
+function startRecording() {
+  isRecording.value = true
+  recordingStartTime = Date.now()
+  
+  recordingInterval = window.setInterval(() => {
+    const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000)
+    const minutes = Math.floor(elapsed / 60)
+    const seconds = elapsed % 60
+    recordingTime.value = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+  }, 1000)
+}
+
+function stopRecording() {
+  isRecording.value = false
+  if (recordingInterval !== null) {
+    clearInterval(recordingInterval)
+    recordingInterval = null
+  }
+  recordingTime.value = '00:00'
 }
 </script>
 
@@ -293,6 +277,92 @@ function flipCamera() {
 @media (min-width: 769px) {
   .live-view-container {
     padding: 1rem;
+  }
+}
+
+.recording-indicator {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 100;
+}
+
+.recording-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: rgba(0, 0, 0, 0.6);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 20px;
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.recording-button:hover {
+  background: rgba(0, 0, 0, 0.8);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.recording-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.recording-indicator.recording .recording-dot {
+  opacity: 1;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.recording-text {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+.recording-indicator.recording .recording-text {
+  opacity: 1;
+}
+
+.recording-timer {
+  font-family: 'Courier New', monospace;
+  font-size: 0.875rem;
+  min-width: 45px;
+  text-align: right;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.8);
+  }
+}
+
+@media (max-width: 768px) {
+  .recording-indicator {
+    top: 0.75rem;
+    right: 0.75rem;
+  }
+  
+  .recording-button {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.75rem;
+  }
+  
+  .recording-timer {
+    font-size: 0.75rem;
+    min-width: 40px;
   }
 }
 </style>

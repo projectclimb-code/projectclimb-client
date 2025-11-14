@@ -14,12 +14,18 @@
       :is-session-route="isSessionRoute"
       :start-mode="startMode"
       :end-mode="endMode"
+      :is-recording="isRecording"
+      :recording-time="recordingTime"
       @save="handleSave"
       @cancel="handleCancel"
       @edit-info="handleEditInfo"
       @flip="handleFlip"
       @start="activateStartMode"
       @end="activateEndMode"
+      @restart="handleRestart"
+      @relay="handleRelay"
+      @pause="handlePause"
+      @toggle-recording="toggleRecording"
     />
 
     <div
@@ -75,7 +81,7 @@
     >
       <div class="route-info-content">
         <span class="route-name">{{ currentRoute.name }}</span>
-        <DifficultyTag :grade="currentRoute.data.grade" />
+        <DifficultyTag v-if="currentRoute.data?.grade" :grade="currentRoute.data.grade" />
       </div>
     </div>
 
@@ -101,6 +107,7 @@ import CancelDialog from './CancelDialog.vue'
 import CreateBoulderDialog from './CreateBoulderDialog.vue'
 import { POSE_CONNECTIONS } from '@mediapipe/pose'
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils'
+import Konva from 'konva'
 
 // Custom pose connections to ensure arms connect correctly to shoulders, not torso center
 // MediaPipe Pose landmark indices:
@@ -162,16 +169,26 @@ const startMode = ref(false)
 const endMode = ref(false)
 const selectedStarts = ref<string[]>([])
 const selectedEnd = ref<string | null>(null)
-const selectedNormalPositions = ref<Set<string>>(new Set())
-const replaceFirstStartNext = ref(false) // Track which start to replace next when both are selected
-const currentRoute = ref<Route | null>(null)
+  const selectedNormalPositions = ref<Set<string>>(new Set())
+  const replaceFirstStartNext = ref(false) // Track which start to replace next when both are selected
+  const currentRoute = ref<Route | null>(null)
+  const touchedHolds = ref<Map<string, number>>(new Map()) // Track holds that have been touched in session mode: holdId -> time (in milliseconds)
+  const timeTextNodes = ref<Map<string, any>>(new Map()) // Store Konva Text nodes for time labels: holdId -> Text node
+
+// Recording state for session mode
+const isRecording = ref(false)
+const recordingTime = ref('00:00')
+let recordingInterval: number | null = null
+let recordingStartTime = 0
 
 // Skeleton drawing state
 const lastPoseData = ref<any[] | null>(null)
+const smoothedPoseData = ref<any[] | null>(null) // Smoothed pose data for better animation
 let skeletonCtx: CanvasRenderingContext2D | null = null
 let skeletonAnimationFrame: number | null = null
 let wsUnsubscribe: (() => void) | null = null
 let isSkeletonLoopRunning = false
+const SMOOTHING_FACTOR = 0.7 // Smoothing factor for landmark positions (0-1, higher = more smoothing)
 
 // Buffering for smooth animation
 interface BufferedPoseFrame {
@@ -182,9 +199,6 @@ const poseBuffer: BufferedPoseFrame[] = []
 const BUFFER_SIZE = 3 // Store last 3 frames
 const INTERPOLATION_DELAY = 16 // ~60 FPS (16ms per frame)
 const MAX_FRAME_AGE = 200 // Max age of frame in ms before considering it stale
-let reconnectAttempts = 0
-const MAX_RECONNECT_ATTEMPTS = 5
-let reconnectTimeout: number | null = null
 
 // Debug/performance tracking
 let wsMessageCount = 0
@@ -442,26 +456,64 @@ function handleFlip() {
 }
 
 function preview() {
-  websocketService.send({
-    type: 'preview',
-    route: {
-      id: currentRoute.value?.id,
-      data: {
-        problem: {
-          holds: [
-            ...selectedStarts.value.map((id) => ({ id, type: HoldType.start })),
-            ...Array.from(selectedNormalPositions.value).map((id) => ({
-              id,
-              type: HoldType.normal,
-            })),
-            ...(selectedEnd.value
-              ? [{ id: selectedEnd.value, type: HoldType.finish }]
-              : []),
-          ],
-        },
+  websocketService.sendPreview({
+    id: currentRoute.value?.id,
+    data: {
+      problem: {
+        holds: [
+          ...selectedStarts.value.map((id) => ({ id, type: HoldType.start })),
+          ...Array.from(selectedNormalPositions.value).map((id) => ({
+            id,
+            type: HoldType.normal,
+          })),
+          ...(selectedEnd.value
+            ? [{ id: selectedEnd.value, type: HoldType.finish }]
+            : []),
+        ],
       }
     }
   })
+}
+
+function handleRestart() {
+  websocketService.sendSessionAction('restart')
+}
+
+function handleRelay() {
+  websocketService.sendSessionAction('relay')
+}
+
+function handlePause() {
+  websocketService.sendSessionAction('pause')
+}
+
+function toggleRecording() {
+  if (isRecording.value) {
+    stopRecording()
+  } else {
+    startRecording()
+  }
+}
+
+function startRecording() {
+  isRecording.value = true
+  recordingStartTime = Date.now()
+  
+  recordingInterval = window.setInterval(() => {
+    const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000)
+    const minutes = Math.floor(elapsed / 60)
+    const seconds = elapsed % 60
+    recordingTime.value = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+  }, 1000)
+}
+
+function stopRecording() {
+  isRecording.value = false
+  if (recordingInterval !== null) {
+    clearInterval(recordingInterval)
+    recordingInterval = null
+  }
+  recordingTime.value = '00:00'
 }
 
 function activateStartMode() {
@@ -635,12 +687,16 @@ onBeforeUnmount(() => {
     cancelAnimationFrame(skeletonAnimationFrame)
     skeletonAnimationFrame = null
   }
-  if (reconnectTimeout !== null) {
-    clearTimeout(reconnectTimeout)
-    reconnectTimeout = null
-  }
   isSkeletonLoopRunning = false
   poseBuffer.length = 0 // Clear buffer
+  touchedHolds.value.clear() // Clear touched holds
+  // Remove all time text nodes
+  timeTextNodes.value.forEach((textNode) => {
+    textNode.destroy()
+  })
+  timeTextNodes.value.clear()
+  smoothedPoseData.value = null // Clear smoothed data
+  stopRecording() // Stop recording if active
   // Only disconnect if we're leaving session mode
   if (!isSessionRoute.value) {
     websocketService.disconnect()
@@ -758,6 +814,14 @@ function handleNormalSelection(pathId: string) {
   path.getLayer()?.batchDraw()
 }
 
+function formatTime(timeMs: number): string {
+  // Convert milliseconds to MM:SS format
+  const totalSeconds = Math.floor(timeMs / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
+
 function updatePathColors() {
   if (!mainLayer.value || !stage.value) return
 
@@ -765,13 +829,86 @@ function updatePathColors() {
   const children = mainLayer.value.children
   if (!children) return
 
+  // Remove old time text nodes for holds that are no longer touched
+  const currentTouchedIds = new Set<string>()
+  touchedHolds.value.forEach((_, holdId) => {
+    currentTouchedIds.add(holdId)
+    currentTouchedIds.add(`hold_${holdId}`)
+  })
+
+  timeTextNodes.value.forEach((textNode, holdId) => {
+    if (!currentTouchedIds.has(holdId) && !currentTouchedIds.has(holdId.replace('hold_', ''))) {
+      textNode.destroy()
+      timeTextNodes.value.delete(holdId)
+    }
+  })
+
   children.forEach((node: any) => {
     const pathId = node.id()
     const isStart = selectedStarts.value.includes(pathId)
     const isEnd = selectedEnd.value === pathId
     const isNormalSelected = selectedNormalPositions.value.has(pathId)
+    
+    // Check if touched - try both pathId and with "hold_" prefix
+    let touchedTime: number | null = null
+    if (isSessionRoute.value) {
+      touchedTime = touchedHolds.value.get(pathId) || touchedHolds.value.get(`hold_${pathId}`) || null
+    }
+    const isTouched = touchedTime !== null
 
-    if (isStart) {
+    if (isTouched) {
+      // Transparent green for touched holds in session mode
+      node.fill('rgba(0, 255, 0, 0.3)')
+      node.opacity(1)
+      node.strokeWidth(0)
+      node.stroke('transparent')
+
+      // Create or update time text label
+      const textId = `time_${pathId}`
+      let timeText = timeTextNodes.value.get(textId)
+      
+      if (!timeText) {
+        // Create new text node
+        const box = node.getClientRect()
+        const centerX = box.x + box.width / 2
+        const centerY = box.y + box.height / 2
+
+        timeText = new Konva.Text({
+          id: textId,
+          text: formatTime(touchedTime!),
+          fontSize: 14,
+          fontFamily: 'Arial',
+          fill: '#000000',
+          stroke: '#ffffff',
+          strokeWidth: 2,
+          x: centerX,
+          y: centerY - 10, // Position slightly above center
+          align: 'center',
+          verticalAlign: 'middle',
+          offsetX: 0,
+          offsetY: 0,
+          listening: false,
+          perfectDrawEnabled: false,
+        })
+
+        // Calculate text width for proper centering
+        timeText.offsetX(timeText.width() / 2)
+        timeText.offsetY(timeText.height() / 2)
+
+        mainLayer.value.add(timeText)
+        timeTextNodes.value.set(textId, timeText)
+      } else {
+        // Update existing text node
+        timeText.text(formatTime(touchedTime!))
+        const box = node.getClientRect()
+        const centerX = box.x + box.width / 2
+        const centerY = box.y + box.height / 2
+        timeText.x(centerX)
+        timeText.y(centerY - 10)
+        timeText.offsetX(timeText.width() / 2)
+        timeText.offsetY(timeText.height() / 2)
+      }
+    } else if (isStart) {
       node.fill('green')
       node.opacity(1)
     } else if (isEnd) {
@@ -861,9 +998,38 @@ function applyTransform() {
     x: basePosition.value.x + panOffset.value.x,
     y: basePosition.value.y + panOffset.value.y,
   })
+
+  // Update time text positions when transform changes
+  if (isSessionRoute.value && timeTextNodes.value.size > 0) {
+    updateTimeTextPositions()
+  }
+
   konvaStage.draw()
 
   // Redraw skeleton if in session mode (skeleton will be redrawn in animation loop)
+}
+
+function updateTimeTextPositions() {
+  if (!mainLayer.value || !stage.value) return
+
+  const children = mainLayer.value.children
+  if (!children) return
+
+  timeTextNodes.value.forEach((timeText, textId) => {
+    // Extract pathId from textId (format: "time_0", "time_1", etc.)
+    const pathId = textId.replace('time_', '')
+    const pathNode = mainLayer.value.findOne(`#${pathId}`)
+    
+    if (pathNode) {
+      const box = pathNode.getClientRect()
+      const centerX = box.x + box.width / 2
+      const centerY = box.y + box.height / 2
+      timeText.x(centerX)
+      timeText.y(centerY - 10)
+      timeText.offsetX(timeText.width() / 2)
+      timeText.offsetY(timeText.height() / 2)
+    }
+  })
 }
 
 function handleZoomIn() {
@@ -1088,160 +1254,103 @@ async function initKonva() {
 function setupWebSocket() {
   if (!isSessionRoute.value) return
 
-  const wsUrl = 'wss://climber.dev.maptnh.net/ws/holds/'
-
-  // Don't disconnect if already connected to the same URL - just reuse the connection
-  // Only disconnect if we need to change endpoints
-
-  // Clear any existing reconnect timeout
-  if (reconnectTimeout !== null) {
-    clearTimeout(reconnectTimeout)
-    reconnectTimeout = null
-  }
-
-  reconnectAttempts = 0
-
-  const connectWebSocket = () => {
-    try {
-      websocketService.connect(wsUrl)
-
-      // Subscribe to WebSocket messages for pose data
-      wsUnsubscribe = websocketService.subscribe((data: any) => {
-        // Process immediately without blocking - use microtask for debug logging
-        const now = performance.now()
-
-        // Parse landmarks first (fast path)
-        let landmarks: any[] | null = null
-
-        if (Array.isArray(data)) {
-          landmarks = data
-        } else if (data?.landmarks) {
-          landmarks = Array.isArray(data.landmarks) ? data.landmarks : null
-        } else if (data?.pose_landmarks) {
-          landmarks = Array.isArray(data.pose_landmarks) ? data.pose_landmarks : null
+  // Use the service to connect to session WebSocket
+  wsUnsubscribe = websocketService.connectSession({
+    onHolds: (holds: any[]) => {
+      const newTouchedHolds = new Map<string, number>()
+      
+      holds.forEach((hold: any) => {
+        if (!hold.id) return
+        
+        // Extract hold ID - try both with and without "hold_" prefix
+        // SVG paths have IDs like "0", "1", etc. (extracted from "hold_0", "hold_1")
+        let holdId = hold.id
+        if (holdId.startsWith('hold_')) {
+          holdId = holdId.replace('hold_', '')
         }
-
-        // Update data immediately if valid
-        if (landmarks && landmarks.length > 0) {
-          // Store latest landmarks
-          lastPoseData.value = landmarks
-
-          // Add to buffer for smooth interpolation
-          poseBuffer.push({
-            landmarks: landmarks,
-            timestamp: now
-          })
-
-          // Keep buffer size limited
-          if (poseBuffer.length > BUFFER_SIZE) {
-            poseBuffer.shift()
-          }
-
-          // Start continuous animation loop if not already running
-          if (!isSkeletonLoopRunning) {
-            isSkeletonLoopRunning = true
-            if (DEBUG_SKELETON) {
-              console.log('[Skeleton Debug] Starting animation loop')
-            }
-            skeletonAnimationLoop()
-          }
-        }
-
-        // Debug tracking (async to not block message processing)
-        if (DEBUG_SKELETON) {
-          // Use setTimeout with 0 delay to defer debug work
-          setTimeout(() => {
-            wsMessageCount++
-            const timeSinceLastMessage = wsLastMessageTime > 0 ? now - wsLastMessageTime : 0
-            wsLastMessageTime = now
-            wsMessageTimes.push(timeSinceLastMessage)
-
-            // Keep only last 60 timings (about 1 second at 60fps)
-            if (wsMessageTimes.length > 60) {
-              wsMessageTimes.shift()
-            }
-
-            // Log stats every 30 messages
-            if (wsMessageCount % 30 === 0) {
-              const avgTime = wsMessageTimes.reduce((a, b) => a + b, 0) / wsMessageTimes.length
-              const minTime = Math.min(...wsMessageTimes.filter(t => t > 0))
-              const maxTime = Math.max(...wsMessageTimes)
-              const fps = avgTime > 0 ? (1000 / avgTime).toFixed(1) : 'N/A'
-              console.log('[Skeleton Debug] WebSocket:', {
-                messageCount: wsMessageCount,
-                avgInterval: `${avgTime.toFixed(2)}ms`,
-                minInterval: `${minTime.toFixed(2)}ms`,
-                maxInterval: `${maxTime.toFixed(2)}ms`,
-                estimatedFPS: fps,
-                dataSize: JSON.stringify(data).length,
-                isArray: Array.isArray(data),
-                bufferSize: poseBuffer.length,
-              })
-
-              if (landmarks && landmarks.length > 0) {
-                console.log('[Skeleton Debug] Landmarks received:', {
-                  count: landmarks.length,
-                  firstLandmark: landmarks[0],
-                  timestamp: now,
-                })
-              } else {
-                console.warn('[Skeleton Debug] No valid landmarks in message:', data)
-              }
-            }
-          }, 0)
+        
+        // Check if hold is touched (status is "touched" and has time)
+        if (hold.status === 'touched' && hold.time !== null && hold.time !== undefined) {
+          // Store time in milliseconds (assuming time comes in milliseconds from server)
+          // If time comes in seconds, multiply by 1000
+          const timeMs = typeof hold.time === 'number' ? hold.time : parseFloat(hold.time) || 0
+          newTouchedHolds.set(holdId, timeMs)
+          // Also store with "hold_" prefix for matching
+          newTouchedHolds.set(`hold_${holdId}`, timeMs)
         }
       })
+      
+      // Update touched holds
+      touchedHolds.value = newTouchedHolds
+      
+      // Update path colors to reflect touched holds
+      updatePathColors()
+    },
+    onPose: (landmarks: any[]) => {
+      const now = performance.now()
 
-      // Reset reconnect attempts on successful connection
-      reconnectAttempts = 0
-    } catch (error) {
-      console.error('[Skeleton Debug] WebSocket connection error:', error)
-      attemptReconnect(wsUrl)
+      // Store latest landmarks
+      lastPoseData.value = landmarks
+
+      // Add to buffer for smooth interpolation
+      poseBuffer.push({
+        landmarks: landmarks,
+        timestamp: now
+      })
+
+      // Keep buffer size limited
+      if (poseBuffer.length > BUFFER_SIZE) {
+        poseBuffer.shift()
+      }
+
+      // Start continuous animation loop if not already running
+      if (!isSkeletonLoopRunning) {
+        isSkeletonLoopRunning = true
+        if (DEBUG_SKELETON) {
+          console.log('[Skeleton Debug] Starting animation loop')
+        }
+        skeletonAnimationLoop()
+      }
+
+      // Debug tracking (async to not block message processing)
+      if (DEBUG_SKELETON) {
+        // Use setTimeout with 0 delay to defer debug work
+        setTimeout(() => {
+          wsMessageCount++
+          const timeSinceLastMessage = wsLastMessageTime > 0 ? now - wsLastMessageTime : 0
+          wsLastMessageTime = now
+          wsMessageTimes.push(timeSinceLastMessage)
+
+          // Keep only last 60 timings (about 1 second at 60fps)
+          if (wsMessageTimes.length > 60) {
+            wsMessageTimes.shift()
+          }
+
+          // Log stats every 30 messages
+          if (wsMessageCount % 30 === 0) {
+            const avgTime = wsMessageTimes.reduce((a, b) => a + b, 0) / wsMessageTimes.length
+            const minTime = Math.min(...wsMessageTimes.filter(t => t > 0))
+            const maxTime = Math.max(...wsMessageTimes)
+            const fps = avgTime > 0 ? (1000 / avgTime).toFixed(1) : 'N/A'
+            console.log('[Skeleton Debug] WebSocket:', {
+              messageCount: wsMessageCount,
+              avgInterval: `${avgTime.toFixed(2)}ms`,
+              minInterval: `${minTime.toFixed(2)}ms`,
+              maxInterval: `${maxTime.toFixed(2)}ms`,
+              estimatedFPS: fps,
+              bufferSize: poseBuffer.length,
+            })
+
+            console.log('[Skeleton Debug] Landmarks received:', {
+              count: landmarks.length,
+              firstLandmark: landmarks[0],
+              timestamp: now,
+            })
+          }
+        }, 0)
+      }
     }
-  }
-
-  // Initial connection attempt
-  setTimeout(() => {
-    connectWebSocket()
-  }, 100)
-}
-
-function attemptReconnect(wsUrl: string) {
-  // Only reconnect if we're still in session mode and haven't exceeded max attempts
-  if (!isSessionRoute.value || reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-    if (DEBUG_SKELETON && reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-      console.error('[Skeleton Debug] Max reconnection attempts reached')
-    }
-    return
-  }
-
-  // Clear any existing reconnect timeout
-  if (reconnectTimeout !== null) {
-    clearTimeout(reconnectTimeout)
-    reconnectTimeout = null
-  }
-
-  reconnectAttempts++
-  const delay = Math.min(2000 * reconnectAttempts, 10000) // Longer delays, max 10s
-
-  if (DEBUG_SKELETON) {
-    console.log(`[Skeleton Debug] Reconnecting attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} in ${delay}ms`)
-  }
-
-  reconnectTimeout = window.setTimeout(() => {
-    if (!isSessionRoute.value) {
-      return // Don't reconnect if we've left session mode
-    }
-
-    // Only reconnect if socket is actually closed
-    try {
-      websocketService.connect(wsUrl)
-      reconnectAttempts = 0 // Reset on successful connection
-    } catch (error) {
-      console.error('[Skeleton Debug] Reconnection failed:', error)
-      // Don't recursively call attemptReconnect - let it happen naturally if needed
-    }
-  }, delay)
+  })
 }
 
 function updateSkeletonCanvasSize() {
@@ -1373,6 +1482,27 @@ function transformLandmarks(landmarks: any[]): any[] {
   })
 }
 
+function smoothLandmarks(newLandmarks: any[]): any[] {
+  if (!smoothedPoseData.value || smoothedPoseData.value.length !== newLandmarks.length) {
+    // Initialize smoothed data
+    smoothedPoseData.value = newLandmarks.map(lm => ({ ...lm }))
+    return newLandmarks
+  }
+
+  // Apply exponential smoothing to each landmark
+  return newLandmarks.map((lm, i) => {
+    const prev = smoothedPoseData.value![i]
+    if (!prev) return lm
+
+    return {
+      x: prev.x + (lm.x - prev.x) * (1 - SMOOTHING_FACTOR),
+      y: prev.y + (lm.y - prev.y) * (1 - SMOOTHING_FACTOR),
+      z: prev.z + ((lm.z || 0) - (prev.z || 0)) * (1 - SMOOTHING_FACTOR),
+      visibility: lm.visibility !== undefined ? lm.visibility : (prev.visibility || 1),
+    }
+  })
+}
+
 function drawSkeleton(landmarks: any[]) {
   const drawStartTime = performance.now()
 
@@ -1392,9 +1522,13 @@ function drawSkeleton(landmarks: any[]) {
 
   const ctx = skeletonCtx
 
+  // Apply smoothing to landmarks for smoother animation
+  const smoothedLandmarks = smoothLandmarks(landmarks)
+  smoothedPoseData.value = smoothedLandmarks
+
   // Transform landmarks to canvas coordinates
   const transformStartTime = performance.now()
-  const transformedLandmarks = transformLandmarks(landmarks)
+  const transformedLandmarks = transformLandmarks(smoothedLandmarks)
   const transformTime = performance.now() - transformStartTime
 
   if (transformedLandmarks.length === 0) {
@@ -1405,6 +1539,13 @@ function drawSkeleton(landmarks: any[]) {
   const clearStartTime = performance.now()
   ctx.save()
   ctx.clearRect(0, 0, canvas.width, canvas.height)
+  
+  // Optimize canvas rendering for smooth animation
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  
   const clearTime = performance.now() - clearStartTime
 
   // Draw pose connections using custom connections to ensure arms connect correctly
@@ -1500,7 +1641,7 @@ function skeletonAnimationLoop() {
     })
   }
 
-  // Always continue the loop - never stop it
+  // Always continue the loop at 60fps using requestAnimationFrame
   skeletonAnimationFrame = requestAnimationFrame(() => {
     skeletonAnimationLoop()
   })
@@ -1625,6 +1766,7 @@ function skeletonAnimationLoop() {
   margin-bottom: 0 !important;
 }
 
+
 /* Route info bar */
 .route-info-bar {
   position: fixed;
@@ -1726,3 +1868,4 @@ function skeletonAnimationLoop() {
 }
 
 </style>
+
