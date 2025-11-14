@@ -1087,7 +1087,7 @@ async function initKonva() {
 function setupWebSocket() {
   if (!isSessionRoute.value) return
   
-  const wsUrl = 'wss://climber.dev.maptnh.net/ws/pose/'
+  const wsUrl = 'wss://climber.dev.maptnh.net/ws/holds/'
   
   // Don't disconnect if already connected to the same URL - just reuse the connection
   // Only disconnect if we need to change endpoints
