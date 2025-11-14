@@ -9,31 +9,16 @@
         @camera-change="handleCameraChange"
         @flip-camera="flipCamera"
       />
-      <div v-if="isLoading" class="skeleton-loader">
-        <div class="skeleton-content"></div>
-      </div>
       <CameraFeed
-        v-else
         ref="cameraFeedRef"
         @ready="handleCameraReady"
       />
-      <!-- Recording Button -->
-      <div class="recording-indicator" :class="{ 'recording': isRecording }">
-        <button
-          class="recording-button"
-          @click="toggleRecording"
-        >
-          <span class="recording-dot"></span>
-          <span class="recording-text">rec...</span>
-          <span class="recording-timer">{{ recordingTime }}</span>
-        </button>
-      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import CameraControls from '@/components/live/CameraControls.vue'
 import CameraFeed from '@/components/live/CameraFeed.vue'
 import type { Pose } from '@mediapipe/pose'
@@ -49,51 +34,65 @@ const cameras = ref<CameraDevice[]>([])
 const isUsingFrontCamera = ref(true)
 const isMobile = ref(false)
 const currentStream = ref<MediaStream | null>(null)
-const isLoading = ref(true)
 let poseInstance: Pose | null = null
 
-// Recording state
-const isRecording = ref(false)
-const recordingTime = ref('00:00')
-let recordingInterval: number | null = null
-let recordingStartTime = 0
-
-onMounted(async () => {
-  if (!navigator.mediaDevices?.getUserMedia) {
-    console.error('Camera not supported')
-    isLoading.value = false
+onMounted(() => {
+  // Check if navigator is available
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    console.error('getUserMedia is not supported')
     return
   }
   
-  isMobile.value = window.innerWidth < 768
+  // Check if mobile
+  const userAgent = navigator.userAgent || ''
+  isMobile.value = window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent)
   
   // Enumerate cameras
-  try {
-    const devices = await navigator.mediaDevices.enumerateDevices()
-    devices.forEach((device) => {
-      if (device.kind === 'videoinput') {
-        cameras.value.push({
-          name: device.label || `Camera ${cameras.value.length + 1}`,
-          code: device.deviceId,
+  const enumerateCameras = async () => {
+    try {
+      if (!isMobile.value && navigator.mediaDevices) {
+        try {
+          const tempStream = await navigator.mediaDevices.getUserMedia({ video: true })
+          tempStream.getTracks().forEach(track => track.stop())
+        } catch (err) {
+          console.warn('Could not request camera permission:', err)
+        }
+      }
+      
+      if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+        const devices = await navigator.mediaDevices.enumerateDevices()
+        devices.forEach((device) => {
+          if (device.kind === 'videoinput') {
+            cameras.value.push({
+              name: device.label || `Camera ${cameras.value.length + 1}`,
+              code: device.deviceId,
+            })
+          }
         })
       }
-    })
-  } catch (err) {
-    console.warn('Could not enumerate cameras:', err)
+    } catch (err) {
+      console.error('Error enumerating cameras:', err)
+    }
   }
   
-  // Start camera
-  nextTick(() => {
+  enumerateCameras()
+  
+  // Start camera after a short delay
+  setTimeout(() => {
     if (isMobile.value) {
       startCamera('user')
     } else {
-      startCamera('default')
+      const firstCamera = cameras.value[0]
+      if (firstCamera) {
+        startCamera(firstCamera.code)
+      } else {
+        startCamera('default')
+      }
     }
-  })
+  }, 500)
 })
 
 onBeforeUnmount(() => {
-  stopRecording()
   stopCamera()
   if (cameraFeedRef.value) {
     const videoElement = cameraFeedRef.value.video
@@ -106,7 +105,6 @@ onBeforeUnmount(() => {
 
 function handleCameraReady(videoElement: HTMLVideoElement, pose: Pose) {
   poseInstance = pose
-  isLoading.value = false
 }
 
 function stopCamera() {
@@ -120,36 +118,78 @@ function stopCamera() {
 }
 
 function startCamera(deviceIdOrFacingMode: string) {
-  if (!cameraFeedRef.value?.video) {
-    nextTick(() => startCamera(deviceIdOrFacingMode))
+  const videoElement = cameraFeedRef.value?.video
+  if (!videoElement) return
+  
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    console.error('getUserMedia is not supported')
     return
   }
   
   stopCamera()
   
-  const constraints: MediaStreamConstraints = isMobile.value
-    ? { video: { facingMode: (deviceIdOrFacingMode === 'user' || deviceIdOrFacingMode === 'environment') ? deviceIdOrFacingMode as 'user' | 'environment' : 'user' }, audio: false }
-    : deviceIdOrFacingMode === 'default'
-    ? { video: true, audio: false }
-    : { video: { deviceId: { exact: deviceIdOrFacingMode } }, audio: false }
+  let constraints: MediaStreamConstraints
   
   if (isMobile.value) {
-    isUsingFrontCamera.value = deviceIdOrFacingMode === 'user'
+    if (deviceIdOrFacingMode === 'user' || deviceIdOrFacingMode === 'environment') {
+      constraints = {
+        video: { facingMode: deviceIdOrFacingMode as 'user' | 'environment' },
+        audio: false,
+      }
+      isUsingFrontCamera.value = deviceIdOrFacingMode === 'user'
+    } else {
+      constraints = {
+        video: { facingMode: 'user' },
+        audio: false,
+      }
+      isUsingFrontCamera.value = true
+    }
+  } else {
+    if (deviceIdOrFacingMode === 'default') {
+      constraints = {
+        video: true,
+        audio: false,
+      }
+    } else {
+      constraints = {
+        video: { deviceId: { exact: deviceIdOrFacingMode } },
+        audio: false,
+      }
+    }
   }
   
   navigator.mediaDevices
     .getUserMedia(constraints)
     .then((stream) => {
       currentStream.value = stream
-      const videoElement = cameraFeedRef.value?.video
       if (videoElement) {
-        videoElement.srcObject = stream
-        videoElement.play().catch(console.error)
+        // Stop any existing playback first
+        videoElement.pause()
+        videoElement.srcObject = null
+        
+        // Wait a bit before setting new stream
+        setTimeout(() => {
+          if (videoElement) {
+            videoElement.srcObject = stream
+            // Wait for video to be ready before playing
+            videoElement.onloadedmetadata = () => {
+              videoElement.play().catch((err) => {
+                // Ignore AbortError - it's expected when switching cameras
+                if (err.name !== 'AbortError') {
+                  console.error('Error playing video:', err)
+                }
+              })
+            }
+          }
+        }, 100)
       }
       
-      if (cameraFeedRef.value) {
-        cameraFeedRef.value.restartCamera()
-      }
+      // Restart MediaPipe Camera with new stream after a delay
+      setTimeout(() => {
+        if (cameraFeedRef.value) {
+          cameraFeedRef.value.restartCamera()
+        }
+      }, 300)
       
       if (!isMobile.value && deviceIdOrFacingMode !== 'default') {
         const camera = cameras.value.find(cam => cam.code === deviceIdOrFacingMode)
@@ -159,8 +199,7 @@ function startCamera(deviceIdOrFacingMode: string) {
       }
     })
     .catch((err) => {
-      console.error('Camera error:', err.name, err.message)
-      isLoading.value = false
+      console.error('Error accessing camera:', err)
     })
 }
 
@@ -185,71 +224,9 @@ function flipCamera() {
     }
   }
 }
-
-function toggleRecording() {
-  if (isRecording.value) {
-    stopRecording()
-  } else {
-    startRecording()
-  }
-}
-
-function startRecording() {
-  isRecording.value = true
-  recordingStartTime = Date.now()
-  
-  recordingInterval = window.setInterval(() => {
-    const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000)
-    const minutes = Math.floor(elapsed / 60)
-    const seconds = elapsed % 60
-    recordingTime.value = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-  }, 1000)
-}
-
-function stopRecording() {
-  isRecording.value = false
-  if (recordingInterval !== null) {
-    clearInterval(recordingInterval)
-    recordingInterval = null
-  }
-  recordingTime.value = '00:00'
-}
 </script>
 
 <style scoped lang="scss">
-.skeleton-loader {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #1a1a1a;
-  position: relative;
-  overflow: hidden;
-}
-
-.skeleton-content {
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.05) 0%,
-    rgba(255, 255, 255, 0.1) 50%,
-    rgba(255, 255, 255, 0.05) 100%
-  );
-  background-size: 200% 100%;
-  animation: skeleton-loading 1.5s ease-in-out infinite;
-}
-
-@keyframes skeleton-loading {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
-}
-
 .live-view-container {
   width: 100%;
   height: 100%;
@@ -277,92 +254,6 @@ function stopRecording() {
 @media (min-width: 769px) {
   .live-view-container {
     padding: 1rem;
-  }
-}
-
-.recording-indicator {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  z-index: 100;
-}
-
-.recording-button {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: rgba(0, 0, 0, 0.6);
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-radius: 20px;
-  color: white;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  backdrop-filter: blur(10px);
-}
-
-.recording-button:hover {
-  background: rgba(0, 0, 0, 0.8);
-  border-color: rgba(255, 255, 255, 0.5);
-}
-
-.recording-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #ef4444;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.recording-indicator.recording .recording-dot {
-  opacity: 1;
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-.recording-text {
-  font-size: 0.75rem;
-  opacity: 0.7;
-}
-
-.recording-indicator.recording .recording-text {
-  opacity: 1;
-}
-
-.recording-timer {
-  font-family: 'Courier New', monospace;
-  font-size: 0.875rem;
-  min-width: 45px;
-  text-align: right;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.5;
-    transform: scale(0.8);
-  }
-}
-
-@media (max-width: 768px) {
-  .recording-indicator {
-    top: 0.75rem;
-    right: 0.75rem;
-  }
-  
-  .recording-button {
-    padding: 0.4rem 0.8rem;
-    font-size: 0.75rem;
-  }
-  
-  .recording-timer {
-    font-size: 0.75rem;
-    min-width: 40px;
   }
 }
 </style>
