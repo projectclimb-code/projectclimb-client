@@ -345,8 +345,8 @@ function updatePathColors() {
       node.strokeWidth(8)
     } else {
       node.fill('white')
-      node.opacity(0.6)
-      node.strokeWidth(5)
+      node.opacity(0.25)
+      node.strokeWidth(2)
     }
   })
 
@@ -418,7 +418,7 @@ watch(() => props.route.data?.problem?.holds, () => {
             v-if="hasVideo && videoSrc"
             ref="videoRef"
             :src="videoSrc"
-            class="absolute"
+            class="absolute route-video"
             :style="{ opacity: isPlaying ? 0.3 : 0.5, zIndex: 2, pointerEvents: 'none', ...videoStyle, objectFit: 'contain' }"
             @ended="onVideoEnded"
             @pause="onVideoPaused"
@@ -621,6 +621,15 @@ $primary-color: #000;
 
 .route-action-button:active {
   transform: scale(0.95);
+}
+
+.route-video {
+  background-color: transparent;
+  mix-blend-mode: normal;
+}
+
+.route-video::-webkit-media-controls {
+  display: none !important;
 }
 
 </style>
