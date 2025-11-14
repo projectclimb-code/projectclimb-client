@@ -163,6 +163,7 @@ const endMode = ref(false)
 const selectedStarts = ref<string[]>([])
 const selectedEnd = ref<string | null>(null)
 const selectedNormalPositions = ref<Set<string>>(new Set())
+const replaceFirstStartNext = ref(false) // Track which start to replace next when both are selected
 const currentRoute = ref<Route | null>(null)
 
 // Skeleton drawing state
@@ -464,14 +465,24 @@ function preview() {
 
 function activateStartMode() {
   disablePanMode()
-  startMode.value = true
-  endMode.value = false
+  // Toggle start mode - if already active, turn it off
+  if (startMode.value) {
+    startMode.value = false
+  } else {
+    startMode.value = true
+    endMode.value = false
+  }
 }
 
 function activateEndMode() {
   disablePanMode()
-  endMode.value = true
-  startMode.value = false
+  // Toggle end mode - if already active, turn it off
+  if (endMode.value) {
+    endMode.value = false
+  } else {
+    endMode.value = true
+    startMode.value = false
+  }
 }
 
 function isWideScreen(width?: number, height?: number) {
@@ -657,25 +668,44 @@ function handleStartSelection(pathId: string) {
   // If clicking an already selected start, deselect it
   if (index > -1) {
     selectedStarts.value.splice(index, 1)
+    // Reset cycling when deselecting
+    if (selectedStarts.value.length < 2) {
+      replaceFirstStartNext.value = false
+    }
     updatePathColors()
     return
+  }
+  
+  // Remove from normal positions if it was selected as normal
+  selectedNormalPositions.value.delete(pathId)
+  // Remove from end position if it was selected as end
+  if (selectedEnd.value === pathId) {
+    selectedEnd.value = null
   }
   
   // If no starts selected, add first start
   if (selectedStarts.value.length === 0) {
     selectedStarts.value.push(pathId)
+    replaceFirstStartNext.value = false
   }
   // If one start selected, add second start
   else if (selectedStarts.value.length === 1) {
     selectedStarts.value.push(pathId)
-    // Exit start mode after selecting the second start position
-    startMode.value = false
+    replaceFirstStartNext.value = false
+    // Keep start mode active - user must manually turn it off
   }
-  // If both starts selected, replace the last (second) one
+  // If both starts selected, cycle between replacing first and second
   else if (selectedStarts.value.length === 2) {
-    selectedStarts.value[1] = pathId
-    // Exit start mode after replacing
-    startMode.value = false
+    if (replaceFirstStartNext.value) {
+      // Replace the first start
+      selectedStarts.value[0] = pathId
+      replaceFirstStartNext.value = false
+    } else {
+      // Replace the second (last) start
+      selectedStarts.value[1] = pathId
+      replaceFirstStartNext.value = true
+    }
+    // Keep start mode active - user must manually turn it off
   }
   
   updatePathColors()
@@ -686,6 +716,14 @@ function handleEndSelection(pathId: string) {
     selectedEnd.value = null
     updatePathColors()
     return
+  }
+  
+  // Remove from normal positions if it was selected as normal
+  selectedNormalPositions.value.delete(pathId)
+  // Remove from start positions if it was selected as start
+  const startIndex = selectedStarts.value.indexOf(pathId)
+  if (startIndex > -1) {
+    selectedStarts.value.splice(startIndex, 1)
   }
   
   selectedEnd.value = pathId
