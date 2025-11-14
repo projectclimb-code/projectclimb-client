@@ -1,83 +1,83 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+type MessageCallback = (data: any) => void
 
-export type MessageHandler<T = any> = (data: T) => void
+interface SocketConnection {
+  socket: WebSocket
+  listeners: Set<MessageCallback>
+}
 
 export class WebSocketService {
-  private socket: WebSocket | null = null
-  private listeners: Set<MessageHandler> = new Set()
+  private sockets: Map<string, SocketConnection>
 
-  connect(url: string): void {
-    if (this.socket) return // already connected
+  constructor() {
+    this.sockets = new Map()
+  }
 
-    this.socket = new WebSocket(url)
+  connect(url: string, connectionId: string = 'default'): void {
+    if (this.sockets.has(connectionId)) return
 
-    this.socket.onopen = () => {
-      console.log('[WS] Connected to', url)
+    const socket = new WebSocket(url)
+    const listeners = new Set<MessageCallback>()
+
+    socket.onopen = () => {
+      console.log(`[WS:${connectionId}] Connected to`, url)
     }
 
-    this.socket.onmessage = (event: MessageEvent) => {
-      // Process messages immediately - don't delay with requestAnimationFrame
-      // This ensures fastest possible data reception
+    socket.onmessage = (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data)
-        // Process all listeners synchronously for immediate handling
-        this.listeners.forEach((cb) => {
-          try {
-            cb(data)
-          } catch (err) {
-            console.error('[WS] Listener error:', err)
-          }
-        })
+        listeners.forEach((cb) => cb(data))
       } catch (err) {
-        console.error('[WS] Invalid message', err)
+        console.error(`[WS:${connectionId}] Invalid message`, err)
       }
     }
 
-    this.socket.onclose = (event: CloseEvent) => {
-      console.log('[WS] Disconnected', event.code, event.reason)
-      this.socket = null
-      
-      // Only attempt reconnection if it was an unexpected close (not a manual disconnect)
-      // Code 1000 = normal closure, 1001 = going away, 1006 = abnormal closure
-      if (event.code !== 1000 && event.code !== 1001) {
-        // Don't auto-reconnect here - let the component handle it if needed
-      }
+    socket.onclose = () => {
+      console.log(`[WS:${connectionId}] Disconnected`)
+      this.sockets.delete(connectionId)
     }
 
-    this.socket.onerror = (err) => {
-      console.error('[WS] Error:', err)
+    socket.onerror = (err) => {
+      console.error(`[WS:${connectionId}] Error:`, err)
     }
+
+    this.sockets.set(connectionId, { socket, listeners })
   }
 
-  subscribe<T = any>(callback: MessageHandler<T>): () => void {
-    this.listeners.add(callback as MessageHandler)
+  subscribe(callback, connectionId = 'default') {
+    const connection = this.sockets.get(connectionId)
+    if (!connection) {
+      console.warn(`[WS] Connection ${connectionId} not found`)
+      return () => {}
+    }
 
-    // Return unsubscribe function
+    connection.listeners.add(callback)
+
     return () => {
-      this.listeners.delete(callback as MessageHandler)
+      connection.listeners.delete(callback)
     }
   }
 
-  // { type: "video", action: "replay", videoid: "67"}
-
-  send(data: unknown): void {
-    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-      this.socket.send(JSON.stringify(data))
+  send(data, connectionId = 'default') {
+    const connection = this.sockets.get(connectionId)
+    if (connection?.socket?.readyState === WebSocket.OPEN) {
+      connection.socket.send(JSON.stringify(data))
     } else {
-      console.warn('[WS] Tried to send message but socket not open')
+      console.warn(`[WS:${connectionId}] Tried to send message but socket not open`)
     }
   }
 
-  /**
-   * Close the connection
-   */
-  disconnect(): void {
-    if (this.socket) {
-      this.socket.close()
-      this.socket = null
+  disconnect(connectionId = 'default') {
+    const connection = this.sockets.get(connectionId)
+    if (connection) {
+      connection.socket.close()
+      this.sockets.delete(connectionId)
     }
+  }
+
+  disconnectAll() {
+    this.sockets.forEach((connection) => connection.socket.close())
+    this.sockets.clear()
   }
 }
 
-// Export a shared instance for use across the app
 export const websocketService = new WebSocketService()
