@@ -166,7 +166,7 @@ async function toggleVideo(event?: Event) {
   if (event) {
     event.stopPropagation()
   }
-  
+
   if (!videoRef.value || !props.route.id) {
     console.warn('Video ref or route ID not available')
     return
@@ -182,7 +182,7 @@ async function toggleVideo(event?: Event) {
       setActiveVideo(props.route.id, videoRef.value)
       await videoRef.value.play()
       isPlaying.value = true
-      
+
           // Send preview message
           isHighlighted.value = true
           websocketService.sendPreview(props.route)
@@ -429,7 +429,7 @@ watch(() => props.route.data?.problem?.holds, () => {
             ref="videoRef"
             :src="videoSrc"
             class="absolute route-video"
-            :style="{ opacity: isPlaying ? 0.2 : 0.3, zIndex: 2, pointerEvents: 'none', ...videoStyle, objectFit: 'contain' }"
+            :style="{ opacity: isPlaying ? 0.5: 0.2, zIndex: 2, pointerEvents: 'none', ...videoStyle, objectFit: 'contain' }"
             @ended="onVideoEnded"
             @pause="onVideoPaused"
             @error="onVideoError"
@@ -635,7 +635,22 @@ $primary-color: #000;
 
 .route-video {
   background-color: transparent;
-  mix-blend-mode: normal;
+  // mix-blend-mode: normal;
+  // mix-blend-mode: multiply;
+  // mix-blend-mode: screen;
+  // mix-blend-mode: overlay;
+  // mix-blend-mode: darken;
+  mix-blend-mode: lighten;
+  // mix-blend-mode: color-dodge;
+  mix-blend-mode: color-burn;
+  mix-blend-mode: hard-light;
+  mix-blend-mode: soft-light;
+  mix-blend-mode: difference;
+    mix-blend-mode: exclusion;
+  // mix-blend-mode: hue;
+  // mix-blend-mode: saturation;
+  // mix-blend-mode: color;
+  // mix-blend-mode: luminosity;
 }
 
 .route-video::-webkit-media-controls {
