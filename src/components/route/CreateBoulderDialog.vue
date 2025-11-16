@@ -1,13 +1,7 @@
 <template>
   <div class="create-boulder-dialog">
     <div class="dialog-header">
-      <div class="header-icon">
-        <i :class="isEditMode ? 'pi pi-file-edit' : 'pi pi-plus-circle'"></i>
-      </div>
       <h3 class="dialog-title">{{ selectGradeOnly ? 'Select Grade' : (isEditMode ? 'Edit Boulder' : 'Create New Boulder') }}</h3>
-      <p class="dialog-description">
-        {{ selectGradeOnly ? 'Please select a grade for this route before saving.' : (isEditMode ? 'Update the name and grade for this boulder route.' : 'Enter a name for your new boulder route.') }}
-      </p>
     </div>
     <div class="dialog-content">
       <div v-if="!selectGradeOnly" class="form-field">
@@ -191,37 +185,18 @@ function handleSubmit() {
 }
 
 .dialog-header {
-  padding: 2rem 2rem 1.5rem 2rem;
+  padding: 1rem 2rem;
   background: linear-gradient(135deg, #4095f2 0%, #2077d6 100%);
   color: white;
   text-align: center;
   position: relative;
 }
 
-.header-icon {
-  margin-bottom: 1rem;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.header-icon .pi {
-  font-size: 3rem;
-  opacity: 0.9;
-}
-
 .dialog-title {
-  margin: 0 0 0.5rem 0;
-  font-size: 1.5rem;
+  margin: 0;
+  font-size: 1.25rem;
   font-weight: 600;
   color: white;
-}
-
-.dialog-description {
-  margin: 0;
-  font-size: 0.9rem;
-  color: rgba(255, 255, 255, 0.9);
-  line-height: 1.6;
 }
 
 .dialog-content {
@@ -401,19 +376,11 @@ function handleSubmit() {
 
 @media (max-width: 640px) {
   .dialog-header {
-    padding: 1.5rem 1.5rem 1.25rem 1.5rem;
-  }
-  
-  .header-icon .pi {
-    font-size: 2.5rem;
+    padding: 0.875rem 1.5rem;
   }
   
   .dialog-title {
-    font-size: 1.25rem;
-  }
-  
-  .dialog-description {
-    font-size: 0.85rem;
+    font-size: 1.1rem;
   }
   
   .dialog-content {
