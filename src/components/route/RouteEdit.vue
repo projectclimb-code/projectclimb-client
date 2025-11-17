@@ -43,6 +43,7 @@
         ref="stage"
         :config="configKonva"
         class="touch-none canvas-stage"
+        :style="{ opacity: isSvgReady ? 1 : 0, transition: 'opacity 0.2s ease-in' }"
       ></v-stage>
       <canvas
         v-if="isSessionRoute"
@@ -165,6 +166,7 @@ const configKonva = ref({
 const stage = ref<any>(null)
 const mainLayer = ref<any>(null)
 const skeletonCanvas = ref<HTMLCanvasElement | null>(null)
+const isSvgReady = ref(false) // Track if SVG is properly positioned
 const startMode = ref(false)
 const endMode = ref(false)
 const selectedStarts = ref<string[]>([])
@@ -189,6 +191,7 @@ let skeletonAnimationFrame: number | null = null
 let wsUnsubscribe: (() => void) | null = null
 let isSkeletonLoopRunning = false
 const SMOOTHING_FACTOR = 0.7 // Smoothing factor for landmark positions (0-1, higher = more smoothing)
+const enableSmoothing = ref(false) // Toggle for enabling/disabling smoothing (default: linear tracking)
 
 // Buffering for smooth animation
 interface BufferedPoseFrame {
@@ -217,7 +220,7 @@ const panOffset = ref({ x: 0, y: 0 }) // User pan offset
 const isPanMode = ref(false)
 const isDragging = ref(false)
 const lastPointerPosition = ref({ x: 0, y: 0 })
-const minZoom = 0.5
+const minZoom = 1 / 1.2 // Allow only one level of zoom out from original (1.0)
 const maxZoom = 3
 
 let observer: ResizeObserver | null = null
@@ -624,17 +627,46 @@ onMounted(async () => {
     }
   }
 
-  setTimeout(async () => {
-    if (stage.value) {
-      const konvaStage = stage.value.getNode()
-      await initKonva()
-
-      setTimeout(() => {
-        isWideScreen()
-        updatePathColors()
-      }, 50)
+  // Wait for container to be ready and set stage size before loading SVG
+  const initializeStage = async () => {
+    if (!innerbox.value || !stage.value) {
+      setTimeout(initializeStage, 50)
+      return
     }
-  }, 100)
+
+    const container = innerbox.value as HTMLElement
+    const containerWidth = container.clientWidth
+    const containerHeight = container.clientHeight
+
+    // Wait for container to have valid dimensions
+    if (containerWidth === 0 || containerHeight === 0) {
+      setTimeout(initializeStage, 50)
+      return
+    }
+
+    // Set stage size first
+    isWideScreen()
+    
+    // Wait for next tick to ensure stage size is applied
+    await nextTick()
+    
+    // Double-check stage has correct size
+    const konvaStage = stage.value.getNode()
+    if (konvaStage.width() === 0 || konvaStage.height() === 0) {
+      setTimeout(initializeStage, 50)
+      return
+    }
+
+    // Now load and position SVG
+    await initKonva()
+    
+    // Update path colors after SVG is loaded
+    setTimeout(() => {
+      updatePathColors()
+    }, 50)
+  }
+
+  setTimeout(initializeStage, 100)
 
   handleResize = () => {
     isWideScreen()
@@ -1058,6 +1090,9 @@ function handleReset() {
     return
   }
 
+  // Hide SVG during reset to prevent jumping
+  isSvgReady.value = false
+
   // Reset zoom and pan values first
   zoomScale.value = 1
   panOffset.value = { x: 0, y: 0 }
@@ -1094,6 +1129,9 @@ function handleReset() {
 
     // Apply transform - this will position the layer at basePosition (centered)
     applyTransform()
+    
+    // Show SVG again after reset is complete
+    isSvgReady.value = true
   })
 }
 
@@ -1212,9 +1250,30 @@ function handleMouseUp() {
 }
 
 async function initKonva() {
-  if (!stage.value) return
+  if (!stage.value || !innerbox.value) return
 
   const konvaStage = stage.value.getNode()
+  const container = innerbox.value as HTMLElement
+  
+  // Ensure stage size matches container
+  const containerWidth = container.clientWidth
+  const containerHeight = container.clientHeight
+  
+  if (containerWidth === 0 || containerHeight === 0) {
+    console.warn('Container not ready, retrying initKonva')
+    setTimeout(() => initKonva(), 50)
+    return
+  }
+
+  // Ensure stage size is correct before loading SVG
+  if (konvaStage.width() !== containerWidth || konvaStage.height() !== containerHeight) {
+    configKonva.value.width = containerWidth
+    configKonva.value.height = containerHeight
+    konvaStage.width(containerWidth)
+    konvaStage.height(containerHeight)
+  }
+
+  // Load SVG
   mainLayer.value = await loadWallSvg(
     handlePathClick,
     selectedStarts.value,
@@ -1224,6 +1283,7 @@ async function initKonva() {
   // Wait for next tick to ensure stage is fully initialized
   await nextTick()
 
+  // Scale and position SVG - this centers it immediately
   scaleLayer(mainLayer.value, konvaStage)
 
   // Store base scale and position after scaleLayer
@@ -1233,21 +1293,47 @@ async function initKonva() {
     y: mainLayer.value.y(),
   }
 
+  // Add layer to stage
   konvaStage.add(mainLayer.value)
 
   // Initialize transform before drawing to prevent jump
   zoomScale.value = 1
   panOffset.value = { x: 0, y: 0 }
   applyTransform()
+  
+  // Draw once everything is positioned correctly
   konvaStage.draw()
 
+  // Show SVG now that it's properly positioned
+  isSvgReady.value = true
+
   // Attach event listeners to the stage container
-  const container = konvaStage.container()
-  container.addEventListener('wheel', handleWheel, { passive: false })
-  container.addEventListener('mousedown', handleMouseDown)
-  container.addEventListener('mousemove', handleMouseMove)
-  container.addEventListener('mouseup', handleMouseUp)
-  container.addEventListener('mouseleave', handleMouseUp)
+  const stageContainer = konvaStage.container()
+  // Only add wheel zoom listener for non-session routes
+  if (!isSessionRoute.value) {
+    stageContainer.addEventListener('wheel', handleWheel, { passive: false })
+  }
+  stageContainer.addEventListener('mousedown', handleMouseDown)
+  stageContainer.addEventListener('mousemove', handleMouseMove)
+  stageContainer.addEventListener('mouseup', handleMouseUp)
+  stageContainer.addEventListener('mouseleave', handleMouseUp)
+}
+
+// Expose smoothing toggle to window for testing
+if (typeof window !== 'undefined') {
+  (window as any).togglePoseSmoothing = () => {
+    enableSmoothing.value = !enableSmoothing.value
+    console.log(`Pose smoothing ${enableSmoothing.value ? 'ENABLED' : 'DISABLED'} (linear tracking)`)
+    return enableSmoothing.value
+  }
+  (window as any).setPoseSmoothing = (enabled: boolean) => {
+    enableSmoothing.value = enabled
+    console.log(`Pose smoothing ${enableSmoothing.value ? 'ENABLED' : 'DISABLED'} (linear tracking)`)
+    return enableSmoothing.value
+  }
+  console.log('Pose smoothing controls available:')
+  console.log('  window.togglePoseSmoothing() - toggle smoothing on/off')
+  console.log('  window.setPoseSmoothing(true/false) - set smoothing state')
 }
 
 // Skeleton drawing functions
@@ -1392,6 +1478,15 @@ function interpolateLandmarks(frame1: any[], frame2: any[], t: number): any[] {
 }
 
 function getInterpolatedPose(): any[] | null {
+  // On session route, use latest frame from buffer (linear tracking, no interpolation)
+  if (isSessionRoute.value) {
+    if (poseBuffer.length > 0) {
+      const latestFrame = poseBuffer[poseBuffer.length - 1]
+      return latestFrame ? latestFrame.landmarks : lastPoseData.value
+    }
+    return lastPoseData.value
+  }
+
   const now = performance.now()
 
   // Clean up stale frames from buffer
@@ -1483,6 +1578,12 @@ function transformLandmarks(landmarks: any[]): any[] {
 }
 
 function smoothLandmarks(newLandmarks: any[]): any[] {
+  // If smoothing is disabled, return landmarks directly (linear tracking)
+  if (!enableSmoothing.value) {
+    smoothedPoseData.value = newLandmarks.map(lm => ({ ...lm }))
+    return newLandmarks
+  }
+
   if (!smoothedPoseData.value || smoothedPoseData.value.length !== newLandmarks.length) {
     // Initialize smoothed data
     smoothedPoseData.value = newLandmarks.map(lm => ({ ...lm }))
@@ -1522,13 +1623,20 @@ function drawSkeleton(landmarks: any[]) {
 
   const ctx = skeletonCtx
 
-  // Apply smoothing to landmarks for smoother animation
-  const smoothedLandmarks = smoothLandmarks(landmarks)
-  smoothedPoseData.value = smoothedLandmarks
+  // Apply smoothing to landmarks (or use linear tracking if disabled)
+  // On session route with linear tracking, skip smoothing to prevent flickering
+  const shouldSmooth = enableSmoothing.value && !isSessionRoute.value
+  const processedLandmarks = shouldSmooth ? smoothLandmarks(landmarks) : landmarks
+  if (shouldSmooth) {
+    smoothedPoseData.value = processedLandmarks
+  } else {
+    // For linear tracking, just store the latest
+    smoothedPoseData.value = processedLandmarks.map(lm => ({ ...lm }))
+  }
 
   // Transform landmarks to canvas coordinates
   const transformStartTime = performance.now()
-  const transformedLandmarks = transformLandmarks(smoothedLandmarks)
+  const transformedLandmarks = transformLandmarks(processedLandmarks)
   const transformTime = performance.now() - transformStartTime
 
   if (transformedLandmarks.length === 0) {
