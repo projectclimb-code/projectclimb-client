@@ -123,7 +123,7 @@ export class WebSocketService {
   // Session-specific methods
   connectSession(callbacks: SessionCallbacks): () => void {
     const connectionId = 'session'
-    const wsUrl = 'wss://climber.dev.maptnh.net/ws/holds/'
+    const wsUrl =`${import.meta.env.VITE_WS_BASE_URL_SESSION || 'ws://localhost:8000/ws/pose/'}`
 
     // Clear any existing reconnect timeout
     const existingTimeout = this.sessionReconnectTimeouts.get(connectionId)
