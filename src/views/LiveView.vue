@@ -13,6 +13,32 @@
         ref="cameraFeedRef"
         @ready="handleCameraReady"
       />
+      
+      <!-- Fake Recording Button (Desktop/Tablet) -->
+      <div v-if="!isMobile" class="recording-button-container">
+        <button
+          class="recording-button-camera"
+          :class="{ 'recording': isRecording }"
+          @click="toggleRecording"
+        >
+          <span v-if="!isRecording" class="recording-button-inner"></span>
+          <span v-else class="recording-button-stop"></span>
+        </button>
+        <div v-if="isRecording" class="recording-timer-display">{{ recordingTime }}</div>
+      </div>
+
+      <!-- Fake Recording Button (Mobile) -->
+      <div v-if="isMobile" class="recording-button-container-mobile">
+        <button
+          class="recording-button-camera-mobile"
+          :class="{ 'recording': isRecording }"
+          @click="toggleRecording"
+        >
+          <span v-if="!isRecording" class="recording-button-inner-mobile"></span>
+          <span v-else class="recording-button-stop-mobile"></span>
+        </button>
+        <div v-if="isRecording" class="recording-timer-display-mobile">{{ recordingTime }}</div>
+      </div>
     </div>
   </div>
 </template>
@@ -35,6 +61,12 @@ const isUsingFrontCamera = ref(true)
 const isMobile = ref(false)
 const currentStream = ref<MediaStream | null>(null)
 let poseInstance: Pose | null = null
+
+// Fake recording state
+const isRecording = ref(false)
+const recordingTime = ref('00:00')
+let recordingInterval: number | null = null
+let recordingStartTime = 0
 
 onMounted(() => {
   // Check if navigator is available
@@ -94,6 +126,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   stopCamera()
+  stopRecording()
   if (cameraFeedRef.value) {
     const videoElement = cameraFeedRef.value.video
     if (videoElement) {
@@ -224,6 +257,36 @@ function flipCamera() {
     }
   }
 }
+
+// Fake recording functions
+function toggleRecording() {
+  if (isRecording.value) {
+    stopRecording()
+  } else {
+    startRecording()
+  }
+}
+
+function startRecording() {
+  isRecording.value = true
+  recordingStartTime = Date.now()
+  
+  recordingInterval = window.setInterval(() => {
+    const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000)
+    const minutes = Math.floor(elapsed / 60)
+    const seconds = elapsed % 60
+    recordingTime.value = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+  }, 1000)
+}
+
+function stopRecording() {
+  isRecording.value = false
+  if (recordingInterval !== null) {
+    clearInterval(recordingInterval)
+    recordingInterval = null
+  }
+  recordingTime.value = '00:00'
+}
 </script>
 
 <style scoped lang="scss">
@@ -255,5 +318,158 @@ function flipCamera() {
   .live-view-container {
     padding: 1rem;
   }
+}
+
+/* Fake Recording Button - Camera App Style (Desktop/Tablet) */
+.recording-button-container {
+  position: absolute;
+  left: 20px;
+  bottom: 20px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.75rem;
+  z-index: 1001;
+}
+
+.recording-button-camera {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  background: white;
+  border: 3px solid rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  transition: box-shadow 0.2s ease, opacity 0.2s ease;
+  position: relative;
+  transform-origin: center;
+  will-change: box-shadow;
+  flex-shrink: 0;
+}
+
+.recording-button-camera:hover {
+  box-shadow: 0 6px 25px rgba(0, 0, 0, 0.4);
+}
+
+.recording-button-camera:active {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  opacity: 0.9;
+}
+
+.recording-button-inner {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: #ef4444;
+  transition: all 0.3s ease;
+}
+
+.recording-button-stop {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 3px;
+  background: white;
+  transition: all 0.3s ease;
+}
+
+.recording-button-camera.recording {
+  background: #ef4444;
+  border-color: rgba(239, 68, 68, 0.8);
+  animation: recordingPulse 2s ease-in-out infinite;
+}
+
+.recording-timer-display {
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  font-family: 'Courier New', monospace;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+  white-space: nowrap;
+}
+
+@keyframes recordingPulse {
+  0%, 100% {
+    box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    box-shadow: 0 4px 30px rgba(239, 68, 68, 0.7);
+  }
+}
+
+/* Fake Recording Button - Mobile */
+.recording-button-container-mobile {
+  position: fixed;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  z-index: 1001;
+}
+
+.recording-button-camera-mobile {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  background: white;
+  border: 2.5px solid rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  transition: box-shadow 0.2s ease, opacity 0.2s ease;
+  transform-origin: center;
+  will-change: box-shadow;
+  flex-shrink: 0;
+}
+
+.recording-button-camera-mobile:active {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  opacity: 0.9;
+}
+
+.recording-button-inner-mobile {
+  width: 1.875rem;
+  height: 1.875rem;
+  border-radius: 50%;
+  background: #ef4444;
+  transition: all 0.3s ease;
+}
+
+.recording-button-stop-mobile {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 2px;
+  background: white;
+  transition: all 0.3s ease;
+}
+
+.recording-button-camera-mobile.recording {
+  background: #ef4444;
+  border-color: rgba(239, 68, 68, 0.8);
+  animation: recordingPulse 2s ease-in-out infinite;
+}
+
+.recording-timer-display-mobile {
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  font-family: 'Courier New', monospace;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+  white-space: nowrap;
 }
 </style>

@@ -113,7 +113,7 @@ function createRoute() {
         </span>
       </div>
     </div>
-    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 p-6 pb-[120px]">
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 p-6 routes-grid">
       <RouteView 
         v-for="route in filteredRoutes" 
         :key="route.id" 
@@ -257,9 +257,22 @@ function createRoute() {
     aspect-ratio: 0.65;
   }
   
-  .grid {
+  .routes-grid {
     gap: 1rem !important;
     padding: 1rem !important;
+    padding-bottom: 96px !important; /* 80px menu height + 8px padding top + 8px padding bottom */
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .routes-grid {
+    padding-bottom: 101px !important; /* 85px menu height + 8px padding top + 8px padding bottom */
+  }
+}
+
+@media (min-width: 1025px) {
+  .routes-grid {
+    padding-bottom: 110px !important; /* 90px menu height + 10px padding top + 10px padding bottom */
   }
 }
 </style>

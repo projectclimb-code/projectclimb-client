@@ -23,4 +23,7 @@ declare module 'vue' {
     SideMenu: typeof import('./src/components/navigation/SideMenu.vue')['default']
     ZoomControls: typeof import('./src/components/route/ZoomControls.vue')['default']
   }
+  export interface GlobalDirectives {
+    Tooltip: typeof import('primevue/tooltip')['default']
+  }
 }
