@@ -736,6 +736,11 @@ onBeforeUnmount(() => {
 })
 
 function handlePathClick(pathId: string) {
+  // Disable hold clicking on session route
+  if (isSessionRoute.value) {
+    return
+  }
+
   // Deselect pan mode when clicking on a path
   if (isPanMode.value) {
     togglePanMode()
@@ -1273,9 +1278,9 @@ async function initKonva() {
     konvaStage.height(containerHeight)
   }
 
-  // Load SVG
+  // Load SVG - disable click handlers on session route
   mainLayer.value = await loadWallSvg(
-    handlePathClick,
+    isSessionRoute.value ? undefined : handlePathClick,
     selectedStarts.value,
     selectedEnd.value
   )
@@ -1291,6 +1296,18 @@ async function initKonva() {
   basePosition.value = {
     x: mainLayer.value.x(),
     y: mainLayer.value.y(),
+  }
+
+  // Disable click/tap events on session route
+  if (isSessionRoute.value && mainLayer.value) {
+    const children = mainLayer.value.children
+    if (children) {
+      children.forEach((node: any) => {
+        node.listening(false)
+        node.off('tap')
+        node.off('click')
+      })
+    }
   }
 
   // Add layer to stage
