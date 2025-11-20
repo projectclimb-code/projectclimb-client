@@ -9,6 +9,9 @@
       class="camera-dropdown"
       @change="$emit('camera-change', $event.value.code)"
     />
+    <div v-if="isMobile" class="camera-status-icon" :class="{ 'front-camera': isUsingFrontCamera, 'back-camera': !isUsingFrontCamera }">
+      <i :class="cameraIcon"></i>
+    </div>
     <Button
       :label="flipButtonLabel"
       :icon="flipButtonIcon"
@@ -58,6 +61,10 @@ const flipButtonLabel = computed(() => {
 
 const flipButtonIcon = computed(() => {
   return 'pi pi-refresh'
+})
+
+const cameraIcon = computed(() => {
+  return props.isUsingFrontCamera ? 'pi pi-user' : 'pi pi-camera'
 })
 
 watch(() => props.selectedCamera, (newCamera) => {
@@ -121,17 +128,46 @@ watch(() => props.selectedCamera, (newCamera) => {
   }
 }
 
+.camera-status-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  
+  &.front-camera {
+    i {
+      color: #4CAF50;
+    }
+  }
+  
+  &.back-camera {
+    i {
+      color: #2196F3;
+    }
+  }
+  
+  i {
+    font-size: 1.3rem;
+  }
+}
+
 @media (max-width: 768px) {
   .camera-controls {
     top: 0.75rem;
     right: 0.75rem;
-    left: 0.75rem;
-    flex-direction: column;
     gap: 0.5rem;
+    flex-wrap: wrap;
   }
   
   .camera-dropdown {
-    width: 100%;
+    flex: 1;
+    min-width: 150px;
+    max-width: 200px;
   }
   
   .flip-camera-button {
@@ -144,6 +180,15 @@ watch(() => props.selectedCamera, (newCamera) => {
     :deep(.p-button-icon) {
       margin: 0;
       font-size: 1.25rem;
+    }
+  }
+  
+  .camera-status-icon {
+    width: 2.25rem;
+    height: 2.25rem;
+    
+    i {
+      font-size: 1.1rem;
     }
   }
 }

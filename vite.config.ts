@@ -6,6 +6,7 @@ import vue from '@vitejs/plugin-vue'
 import Components from 'unplugin-vue-components/vite'
 import { PrimeVueResolver } from '@primevue/auto-import-resolver'
 import tailwindcss from '@tailwindcss/vite'
+import mkcert from 'vite-plugin-mkcert'
 
 // Read package.json to get version
 const packageJson = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'))
@@ -19,6 +20,7 @@ export default defineConfig({
     Components({
       resolvers: [PrimeVueResolver()],
     }),
+    mkcert(), // Enable HTTPS with trusted certificate for development
   ],
   resolve: {
     alias: {
@@ -27,5 +29,9 @@ export default defineConfig({
   },
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(packageJson.version),
+  },
+  server: {
+    https: true, // HTTPS enabled via vite-plugin-mkcert (creates trusted certificates)
+    host: true, // Allow access from network (iPhone can access via https://192.168.0.37:5173)
   },
 })
