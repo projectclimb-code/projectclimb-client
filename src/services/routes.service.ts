@@ -40,9 +40,9 @@ export async function routesCreate(name: string, grade: string, author: string) 
     headers,
     body: JSON.stringify(data),
   })
-  
+
   console.log('API response status:', response.status, response.statusText)
-  
+
   if (!response.ok) {
     const errorText = await response.text()
     console.error('API error response:', errorText)
@@ -51,6 +51,19 @@ export async function routesCreate(name: string, grade: string, author: string) 
   const res = await response.json()
   console.log('API response data:', res)
   return res
+}
+
+export async function startSession(id: number) {
+  const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || ''}session/${id}`, {
+    method: 'GET',
+    headers,
+  })
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch route: ${response.status}`)
+  }
+  const data = await response.json()
+  return data
 }
 
 export async function routesDelete(id: number) {

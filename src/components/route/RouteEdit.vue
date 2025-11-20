@@ -5,23 +5,27 @@
     :class="{
       'h-full': true,
       'pt-[80px]': isTablet && !isSessionRoute,
-      'session-route': isSessionRoute
+      'session-route': isSessionRoute,
     }"
-    :style="isSessionRoute ? { 
-      backgroundImage: `url(${plywood})`, 
-      backgroundSize: 'cover', 
-      backgroundPosition: 'center', 
-      backgroundRepeat: 'no-repeat',
-      minHeight: '0', 
-      position: 'relative', 
-      pointerEvents: 'auto', 
-      overflow: 'hidden' 
-    } : { 
-      minHeight: '0', 
-      position: 'relative', 
-      pointerEvents: 'auto', 
-      overflow: 'hidden' 
-    }"
+    :style="
+      isSessionRoute
+        ? {
+            backgroundImage: `url(${plywood})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            minHeight: '0',
+            position: 'relative',
+            pointerEvents: 'auto',
+            overflow: 'hidden',
+          }
+        : {
+            minHeight: '0',
+            position: 'relative',
+            pointerEvents: 'auto',
+            overflow: 'hidden',
+          }
+    "
   >
     <ActionButtons
       :is-mobile="isMobile"
@@ -100,7 +104,6 @@
         <DifficultyTag v-if="currentRoute.data?.grade" :grade="currentRoute.data.grade" />
       </div>
     </div>
-
   </div>
 </template>
 <script lang="ts" setup>
@@ -124,6 +127,7 @@ import CreateBoulderDialog from './CreateBoulderDialog.vue'
 import { POSE_CONNECTIONS } from '@mediapipe/pose'
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils'
 import Konva from 'konva'
+import { startSession } from '@/services/routes.service'
 
 const CUSTOM_POSE_CONNECTIONS: [number, number][] = [
   ...POSE_CONNECTIONS.filter((conn: [number, number]) => {
@@ -234,7 +238,7 @@ async function handleSave() {
       severity: 'warn',
       summary: 'Warning',
       detail: 'No route to save',
-      life: 3000
+      life: 3000,
     })
     return
   }
@@ -244,7 +248,7 @@ async function handleSave() {
     dialog.open(CreateBoulderDialog, {
       data: {
         route: currentRoute.value,
-        selectGradeOnly: true
+        selectGradeOnly: true,
       },
       props: {
         header: '',
@@ -252,14 +256,14 @@ async function handleSave() {
         modal: true,
         dismissableMask: true,
         closable: false,
-        closeOnEscape: true
+        closeOnEscape: true,
       },
       onClose: async (result) => {
         const data = result?.data
         if (data && data.grade) {
           await performSave(data.grade)
         }
-      }
+      },
     })
     return
   }
@@ -302,14 +306,14 @@ async function performSave(grade?: ClimbingRouteGrade) {
       severity: 'success',
       summary: 'Success',
       detail: 'Saved successfully',
-      life: 3000
+      life: 3000,
     })
   } catch (error) {
     toast.add({
       severity: 'error',
       summary: 'Error',
       detail: 'Failed to save',
-      life: 3000
+      life: 3000,
     })
   }
 }
@@ -323,8 +327,8 @@ function handleCancel() {
       modal: true,
       dismissableMask: true,
       closable: false,
-      closeOnEscape: true
-    }
+      closeOnEscape: true,
+    },
   })
 }
 
@@ -335,14 +339,14 @@ function handleEditInfo() {
       severity: 'warn',
       summary: 'Warning',
       detail: 'No route to edit',
-      life: 3000
+      life: 3000,
     })
     return
   }
 
   dialog.open(CreateBoulderDialog, {
     data: {
-      route: currentRoute.value
+      route: currentRoute.value,
     },
     props: {
       header: '',
@@ -350,7 +354,7 @@ function handleEditInfo() {
       modal: true,
       dismissableMask: true,
       closable: false,
-      closeOnEscape: true
+      closeOnEscape: true,
     },
     onClose: async (result) => {
       const data = result?.data
@@ -362,8 +366,8 @@ function handleEditInfo() {
             data: {
               ...currentRoute.value.data,
               grade: data.grade,
-              author: data.author
-            }
+              author: data.author,
+            },
           }
           await routesStore.saveRoute(updatedRoute)
           currentRoute.value = updatedRoute
@@ -371,18 +375,18 @@ function handleEditInfo() {
             severity: 'success',
             summary: 'Success',
             detail: 'Route updated successfully',
-            life: 3000
+            life: 3000,
           })
         } catch (error) {
           toast.add({
             severity: 'error',
             summary: 'Error',
             detail: 'Failed to update route',
-            life: 3000
+            life: 3000,
           })
         }
       }
-    }
+    },
   })
 }
 
@@ -404,14 +408,14 @@ function flipId(id: string): string {
 
 function handleFlip() {
   disablePanMode()
-  selectedStarts.value = selectedStarts.value.map(id => flipId(id))
+  selectedStarts.value = selectedStarts.value.map((id) => flipId(id))
 
   if (selectedEnd.value) {
     selectedEnd.value = flipId(selectedEnd.value)
   }
 
   const flippedNormal = new Set<string>()
-  selectedNormalPositions.value.forEach(id => {
+  selectedNormalPositions.value.forEach((id) => {
     flippedNormal.add(flipId(id))
   })
   selectedNormalPositions.value = flippedNormal
@@ -429,7 +433,7 @@ function handleFlip() {
       summary: 'Success',
       detail: 'Selections flipped successfully',
       life: 3000,
-      group: 'flip'
+      group: 'flip',
     })
     flipToastTimeout = null
   }, 300)
@@ -446,21 +450,21 @@ function preview() {
             id,
             type: HoldType.normal,
           })),
-          ...(selectedEnd.value
-            ? [{ id: selectedEnd.value, type: HoldType.finish }]
-            : []),
+          ...(selectedEnd.value ? [{ id: selectedEnd.value, type: HoldType.finish }] : []),
         ],
-      }
-    }
+      },
+    },
   })
 }
 
 function handleRestart() {
+  console.log('Restarting session...')
   websocketService.sendSessionAction('restart')
 }
 
 function handleRelay() {
-  websocketService.sendSessionAction('relay')
+  console.log('Relaying session...')
+  restartSession()
 }
 
 function handlePause() {
@@ -484,7 +488,7 @@ function startRecording() {
   isPaused.value = false
   recordingStartTime = Date.now()
   totalPausedDuration = 0
-  
+
   recordingInterval = window.setInterval(() => {
     const elapsed = Math.floor((Date.now() - recordingStartTime - totalPausedDuration) / 1000)
     const minutes = Math.floor(elapsed / 60)
@@ -509,7 +513,7 @@ function resumeRecording() {
   const pauseDuration = Date.now() - pausedTime
   totalPausedDuration += pauseDuration
   pausedTime = 0
-  
+
   recordingInterval = window.setInterval(() => {
     const elapsed = Math.floor((Date.now() - recordingStartTime - totalPausedDuration) / 1000)
     const minutes = Math.floor(elapsed / 60)
@@ -587,7 +591,7 @@ function isWideScreen(width?: number, height?: number) {
   isTablet.value = viewportWidth >= 640 && viewportWidth < 1024
   isLandscape.value = viewportWidth > viewportHeight
 
-    if (stage.value && mainLayer.value) {
+  if (stage.value && mainLayer.value) {
     const konvaStage = stage.value.getNode()
     scaleLayer(mainLayer.value, konvaStage)
 
@@ -608,15 +612,23 @@ function isWideScreen(width?: number, height?: number) {
 
 let handleResize: (() => void) | null = null
 
+function restartSession() {
+  const routeId = route.query.id ? Number(route.query.id) : null
+  if (isSessionRoute.value) {
+    startSession(routeId)
+  }
+}
+
 onMounted(async () => {
   await nextTick()
 
   const routeId = route.query.id ? Number(route.query.id) : null
+
   if (routeId) {
-    await routesStore.getRoutes()
-      const routeToEdit = routesStore.routes.find((r) => r.id === routeId)
-      if (routeToEdit) {
-        currentRoute.value = routeToEdit
+    restartSession(route.query.id ? Number(route.query.id) : null)
+    const routeToEdit = routesStore.routes.find((r) => r.id === routeId)
+    if (routeToEdit) {
+      currentRoute.value = routeToEdit
 
       if (routeToEdit.data?.problem?.holds) {
         routeToEdit.data.problem.holds.forEach((hold) => {
@@ -649,7 +661,7 @@ onMounted(async () => {
 
     isWideScreen()
     await nextTick()
-    
+
     const konvaStage = stage.value.getNode()
     if (konvaStage.width() === 0 || konvaStage.height() === 0) {
       setTimeout(initializeStage, 50)
@@ -855,10 +867,11 @@ function updatePathColors() {
     const isStart = selectedStarts.value.includes(pathId)
     const isEnd = selectedEnd.value === pathId
     const isNormalSelected = selectedNormalPositions.value.has(pathId)
-    
+
     let touchedTime: number | null = null
     if (isSessionRoute.value) {
-      touchedTime = touchedHolds.value.get(pathId) || touchedHolds.value.get(`hold_${pathId}`) || null
+      touchedTime =
+        touchedHolds.value.get(pathId) || touchedHolds.value.get(`hold_${pathId}`) || null
     }
     const isTouched = touchedTime !== null
 
@@ -870,7 +883,7 @@ function updatePathColors() {
 
       const textId = `time_${pathId}`
       let timeText = timeTextNodes.value.get(textId)
-      
+
       if (!timeText) {
         const box = node.getClientRect()
         const centerX = box.x + box.width / 2
@@ -992,7 +1005,7 @@ function updateTimeTextPositions() {
   timeTextNodes.value.forEach((timeText, textId) => {
     const pathId = textId.replace('time_', '')
     const pathNode = mainLayer.value.findOne(`#${pathId}`)
-    
+
     if (pathNode) {
       const box = pathNode.getClientRect()
       const centerX = box.x + box.width / 2
@@ -1228,7 +1241,7 @@ async function initKonva() {
   const container = innerbox.value as HTMLElement
   const containerWidth = container.clientWidth
   const containerHeight = container.clientHeight
-  
+
   if (containerWidth === 0 || containerHeight === 0) {
     setTimeout(() => initKonva(), 50)
     return
@@ -1245,7 +1258,7 @@ async function initKonva() {
   mainLayer.value = await loadWallSvg(
     isSessionRoute.value ? undefined : handlePathClick,
     selectedStarts.value,
-    selectedEnd.value
+    selectedEnd.value,
   )
 
   await nextTick()
@@ -1280,7 +1293,7 @@ async function initKonva() {
   if (!isSessionRoute.value) {
     stageContainer.addEventListener('wheel', handleWheel, { passive: false })
   }
-  
+
   konvaStage.on('mousedown', handleMouseDown)
   konvaStage.on('mousemove', handleMouseMove)
   konvaStage.on('mouseup', handleMouseUp)
@@ -1292,11 +1305,11 @@ async function initKonva() {
 }
 
 if (typeof window !== 'undefined') {
-  (window as any).togglePoseSmoothing = () => {
+  ;(window as any).togglePoseSmoothing = () => {
     enableSmoothing.value = !enableSmoothing.value
     return enableSmoothing.value
   }
-  (window as any).setPoseSmoothing = (enabled: boolean) => {
+  ;(window as any).setPoseSmoothing = (enabled: boolean) => {
     enableSmoothing.value = enabled
     return enableSmoothing.value
   }
@@ -1308,22 +1321,22 @@ function setupWebSocket() {
   wsUnsubscribe = websocketService.connectSession({
     onHolds: (holds: any[]) => {
       const newTouchedHolds = new Map<string, number>()
-      
+
       holds.forEach((hold: any) => {
         if (!hold.id) return
-        
+
         let holdId = hold.id
         if (holdId.startsWith('hold_')) {
           holdId = holdId.replace('hold_', '')
         }
-        
+
         if (hold.status === 'touched' && hold.time !== null && hold.time !== undefined) {
           const timeMs = typeof hold.time === 'number' ? hold.time : parseFloat(hold.time) || 0
           newTouchedHolds.set(holdId, timeMs)
           newTouchedHolds.set(`hold_${holdId}`, timeMs)
         }
       })
-      
+
       touchedHolds.value = newTouchedHolds
       updatePathColors()
     },
@@ -1334,7 +1347,7 @@ function setupWebSocket() {
 
       poseBuffer.push({
         landmarks: landmarks,
-        timestamp: now
+        timestamp: now,
       })
 
       if (poseBuffer.length > BUFFER_SIZE) {
@@ -1345,7 +1358,7 @@ function setupWebSocket() {
         isSkeletonLoopRunning = true
         skeletonAnimationLoop()
       }
-    }
+    },
   })
 }
 
@@ -1377,9 +1390,11 @@ function interpolateLandmarks(frame1: any[], frame2: any[], t: number): any[] {
       x: (lm1.x || 0) + ((lm2.x || 0) - (lm1.x || 0)) * t,
       y: (lm1.y || 0) + ((lm2.y || 0) - (lm1.y || 0)) * t,
       z: (lm1.z || 0) + ((lm2.z || 0) - (lm1.z || 0)) * t,
-      visibility: (lm1.visibility !== undefined ? lm1.visibility : 1) +
-                  ((lm2.visibility !== undefined ? lm2.visibility : 1) -
-                   (lm1.visibility !== undefined ? lm1.visibility : 1)) * t,
+      visibility:
+        (lm1.visibility !== undefined ? lm1.visibility : 1) +
+        ((lm2.visibility !== undefined ? lm2.visibility : 1) -
+          (lm1.visibility !== undefined ? lm1.visibility : 1)) *
+          t,
     }
   })
 }
@@ -1457,8 +1472,8 @@ function transformLandmarks(landmarks: any[]): any[] {
   const topEdge = layerY - scaledHeight / 2
 
   return landmarks.map((lm: any) => {
-    const pixelX = leftEdge + (lm.x * scaledWidth)
-    const pixelY = topEdge + (lm.y * scaledHeight)
+    const pixelX = leftEdge + lm.x * scaledWidth
+    const pixelY = topEdge + lm.y * scaledHeight
 
     return {
       x: pixelX / canvas.width,
@@ -1471,12 +1486,12 @@ function transformLandmarks(landmarks: any[]): any[] {
 
 function smoothLandmarks(newLandmarks: any[]): any[] {
   if (!enableSmoothing.value) {
-    smoothedPoseData.value = newLandmarks.map(lm => ({ ...lm }))
+    smoothedPoseData.value = newLandmarks.map((lm) => ({ ...lm }))
     return newLandmarks
   }
 
   if (!smoothedPoseData.value || smoothedPoseData.value.length !== newLandmarks.length) {
-    smoothedPoseData.value = newLandmarks.map(lm => ({ ...lm }))
+    smoothedPoseData.value = newLandmarks.map((lm) => ({ ...lm }))
     return newLandmarks
   }
 
@@ -1488,7 +1503,7 @@ function smoothLandmarks(newLandmarks: any[]): any[] {
       x: prev.x + (lm.x - prev.x) * (1 - SMOOTHING_FACTOR),
       y: prev.y + (lm.y - prev.y) * (1 - SMOOTHING_FACTOR),
       z: prev.z + ((lm.z || 0) - (prev.z || 0)) * (1 - SMOOTHING_FACTOR),
-      visibility: lm.visibility !== undefined ? lm.visibility : (prev.visibility || 1),
+      visibility: lm.visibility !== undefined ? lm.visibility : prev.visibility || 1,
     }
   })
 }
@@ -1513,7 +1528,7 @@ function drawSkeleton(landmarks: any[]) {
   if (shouldSmooth) {
     smoothedPoseData.value = processedLandmarks
   } else {
-    smoothedPoseData.value = processedLandmarks.map(lm => ({ ...lm }))
+    smoothedPoseData.value = processedLandmarks.map((lm) => ({ ...lm }))
   }
 
   const transformedLandmarks = transformLandmarks(processedLandmarks)
@@ -1599,9 +1614,9 @@ function skeletonAnimationLoop() {
   display: block;
 }
 
-  .box {
-    display: flex !important;
-    justify-content: center !important;
+.box {
+  display: flex !important;
+  justify-content: center !important;
 }
 
 @media (max-width: 640px) {
@@ -1676,18 +1691,18 @@ function skeletonAnimationLoop() {
     touch-action: pan-x pan-y;
     user-select: none;
   }
-  
+
   .canvas-container.pan-mode {
     touch-action: pan-x pan-y;
   }
-  
+
   .canvas-container.pan-mode.pan-dragging {
     touch-action: pan-x pan-y;
   }
 }
 
 /* Ensure canvas container doesn't block bottom menu */
-  .canvas-container {
+.canvas-container {
   pointer-events: auto;
 }
 
@@ -1702,7 +1717,6 @@ function skeletonAnimationLoop() {
   margin-bottom: 0 !important;
 }
 
-
 /* Route info bar */
 .route-info-bar {
   position: fixed;
@@ -1711,7 +1725,9 @@ function skeletonAnimationLoop() {
   background: white;
   padding: 12px 20px;
   border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(0, 0, 0, 0.05);
   z-index: 998;
   display: flex;
   align-items: center;
@@ -1795,13 +1811,13 @@ function skeletonAnimationLoop() {
 :deep(.p-dialog) {
   border-radius: 20px !important;
   overflow: hidden;
-  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05) !important;
+  box-shadow:
+    0 25px 80px rgba(0, 0, 0, 0.25),
+    0 0 0 1px rgba(0, 0, 0, 0.05) !important;
   border: none !important;
 }
 
 :deep(.p-dialog .p-dialog-content) {
   padding: 0 !important;
 }
-
 </style>
-
