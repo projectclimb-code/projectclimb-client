@@ -615,7 +615,7 @@ let handleResize: (() => void) | null = null
 function restartSession() {
   const routeId = route.query.id ? Number(route.query.id) : null
   if (isSessionRoute.value) {
-    startSession(routeId)
+    startSession(routeId || 0)
   }
 }
 
@@ -625,7 +625,7 @@ onMounted(async () => {
   const routeId = route.query.id ? Number(route.query.id) : null
 
   if (routeId) {
-    restartSession(route.query.id ? Number(route.query.id) : null)
+    restartSession()
     const routeToEdit = routesStore.routes.find((r) => r.id === routeId)
     if (routeToEdit) {
       currentRoute.value = routeToEdit

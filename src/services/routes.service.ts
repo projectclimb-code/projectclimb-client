@@ -49,8 +49,14 @@ export async function routesCreate(name: string, grade: string, author: string) 
     throw new Error(`Failed to create route: ${response.status} - ${errorText}`)
   }
   const res = await response.json()
-  console.log('API response data:', res)
   return res
+}
+
+export async function resetAll() {
+  await fetch(`${import.meta.env.VITE_API_BASE_URL || ''}tasks/kill-all/`, {
+    method: 'GET',
+    headers,
+  })
 }
 
 export async function startSession(id: number) {

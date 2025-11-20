@@ -28,10 +28,10 @@ const emit = defineEmits<{
 onMounted(() => {
   const canvasElement = canvas.value
   if (!canvasElement) return
-  
+
   const canvasCtx = canvasElement.getContext('2d')
   if (!canvasCtx) return
-  
+
   poseInstance = new Pose({
     locateFile: (file) => {
       return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
@@ -49,32 +49,32 @@ onMounted(() => {
 
   poseInstance.onResults((results) => {
     if (!canvasElement || !canvasCtx) return
-    
+
     const container = canvasElement.parentElement
     if (container) {
       const containerWidth = container.clientWidth
       const containerHeight = container.clientHeight
-      
+
       if (canvasElement.width !== containerWidth || canvasElement.height !== containerHeight) {
         canvasElement.width = containerWidth
         canvasElement.height = containerHeight
       }
     }
-    
+
     canvasCtx.save()
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height)
-    
+
     if (results.image) {
-      const imageWidth = results.image.width || results.image.videoWidth || 640
-      const imageHeight = results.image.height || results.image.videoHeight || 480
+      const imageWidth = results.image.width || 640
+      const imageHeight = results.image.height || 480
       const imageAspectRatio = imageWidth / imageHeight
       const canvasAspectRatio = canvasElement.width / canvasElement.height
-      
+
       let drawWidth = canvasElement.width
       let drawHeight = canvasElement.height
       let drawX = 0
       let drawY = 0
-      
+
       if (imageAspectRatio > canvasAspectRatio) {
         drawHeight = canvasElement.width / imageAspectRatio
         drawY = (canvasElement.height - drawHeight) / 2
@@ -82,10 +82,10 @@ onMounted(() => {
         drawWidth = canvasElement.height * imageAspectRatio
         drawX = (canvasElement.width - drawWidth) / 2
       }
-      
+
       canvasCtx.fillStyle = '#000000'
       canvasCtx.fillRect(0, 0, canvasElement.width, canvasElement.height)
-      
+
       canvasCtx.drawImage(
         results.image,
         drawX,
@@ -97,23 +97,23 @@ onMounted(() => {
       canvasCtx.fillStyle = '#000000'
       canvasCtx.fillRect(0, 0, canvasElement.width, canvasElement.height)
     }
-    
+
     if (results.poseLandmarks) {
       drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {
         color: '#00FF00',
         lineWidth: 4,
       })
-      
+
       drawLandmarks(canvasCtx, results.poseLandmarks, {
         color: '#FF0000',
         lineWidth: 2,
         radius: 5,
       })
     }
-    
+
     canvasCtx.restore()
   })
-  
+
   if (poseInstance) {
     emit('ready', poseInstance)
   }
