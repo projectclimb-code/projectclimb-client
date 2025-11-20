@@ -32,7 +32,6 @@ onMounted(() => {
   const canvasCtx = canvasElement.getContext('2d')
   if (!canvasCtx) return
   
-  // Initialize MediaPipe Pose
   poseInstance = new Pose({
     locateFile: (file) => {
       return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
@@ -51,45 +50,54 @@ onMounted(() => {
   poseInstance.onResults((results) => {
     if (!canvasElement || !canvasCtx) return
     
-    // Update canvas size
     const container = canvasElement.parentElement
     if (container) {
       const containerWidth = container.clientWidth
       const containerHeight = container.clientHeight
-      const cameraAspectRatio = 640 / 480
-      let canvasWidth = containerWidth
-      let canvasHeight = containerWidth / cameraAspectRatio
       
-      if (canvasHeight > containerHeight) {
-        canvasHeight = containerHeight
-        canvasWidth = containerHeight * cameraAspectRatio
-      }
-      
-      if (canvasElement.width !== canvasWidth || canvasElement.height !== canvasHeight) {
-        canvasElement.width = canvasWidth
-        canvasElement.height = canvasHeight
+      if (canvasElement.width !== containerWidth || canvasElement.height !== containerHeight) {
+        canvasElement.width = containerWidth
+        canvasElement.height = containerHeight
       }
     }
     
     canvasCtx.save()
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height)
     
-    // Draw video frame
     if (results.image) {
+      const imageWidth = results.image.width || results.image.videoWidth || 640
+      const imageHeight = results.image.height || results.image.videoHeight || 480
+      const imageAspectRatio = imageWidth / imageHeight
+      const canvasAspectRatio = canvasElement.width / canvasElement.height
+      
+      let drawWidth = canvasElement.width
+      let drawHeight = canvasElement.height
+      let drawX = 0
+      let drawY = 0
+      
+      if (imageAspectRatio > canvasAspectRatio) {
+        drawHeight = canvasElement.width / imageAspectRatio
+        drawY = (canvasElement.height - drawHeight) / 2
+      } else {
+        drawWidth = canvasElement.height * imageAspectRatio
+        drawX = (canvasElement.width - drawWidth) / 2
+      }
+      
+      canvasCtx.fillStyle = '#000000'
+      canvasCtx.fillRect(0, 0, canvasElement.width, canvasElement.height)
+      
       canvasCtx.drawImage(
         results.image,
-        0,
-        0,
-        canvasElement.width,
-        canvasElement.height
+        drawX,
+        drawY,
+        drawWidth,
+        drawHeight
       )
     } else {
-      // If no image, fill with black background
       canvasCtx.fillStyle = '#000000'
       canvasCtx.fillRect(0, 0, canvasElement.width, canvasElement.height)
     }
     
-    // Draw pose landmarks
     if (results.poseLandmarks) {
       drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {
         color: '#00FF00',
@@ -106,17 +114,14 @@ onMounted(() => {
     canvasCtx.restore()
   })
   
-  // Emit ready event with pose instance
   if (poseInstance) {
     emit('ready', poseInstance)
   }
 })
 
 onBeforeUnmount(() => {
-  // Cleanup if needed
 })
 
-// Expose pose instance
 defineExpose({
   poseInstance: () => poseInstance
 })
@@ -124,11 +129,15 @@ defineExpose({
 
 <style scoped lang="scss">
 .pose-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
-  object-fit: contain;
   background: #000;
   display: block;
+  z-index: 1;
+  object-fit: contain;
 }
 </style>
 
