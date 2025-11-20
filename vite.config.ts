@@ -20,7 +20,7 @@ export default defineConfig({
     Components({
       resolvers: [PrimeVueResolver()],
     }),
-    mkcert(), // Enable HTTPS with trusted certificate for development
+    // mkcert(), // Enable HTTPS with trusted certificate for development
   ],
   resolve: {
     alias: {
