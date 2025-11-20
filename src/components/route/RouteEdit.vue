@@ -4,24 +4,10 @@
     class="flex relative touch-none items-center justify-center w-full route-edit-container"
     :class="{
       'h-full': true,
-      'pt-[80px]': isTablet && !isSessionRoute,
+      'pt-[80px]': isTablet,
       'session-route': isSessionRoute
     }"
-    :style="isSessionRoute ? { 
-      backgroundImage: `url(${plywood})`, 
-      backgroundSize: 'cover', 
-      backgroundPosition: 'center', 
-      backgroundRepeat: 'no-repeat',
-      minHeight: '0', 
-      position: 'relative', 
-      pointerEvents: 'auto', 
-      overflow: 'hidden' 
-    } : { 
-      minHeight: '0', 
-      position: 'relative', 
-      pointerEvents: 'auto', 
-      overflow: 'hidden' 
-    }"
+    style="min-height: 0; position: relative; pointer-events: auto; overflow: hidden;"
   >
     <ActionButtons
       :is-mobile="isMobile"
@@ -29,7 +15,6 @@
       :start-mode="startMode"
       :end-mode="endMode"
       :is-recording="isRecording"
-      :is-paused="isPaused"
       :recording-time="recordingTime"
       @save="handleSave"
       @cancel="handleCancel"
@@ -125,19 +110,32 @@ import { POSE_CONNECTIONS } from '@mediapipe/pose'
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils'
 import Konva from 'konva'
 
+// Custom pose connections to ensure arms connect correctly to shoulders, not torso center
+// MediaPipe Pose landmark indices:
+// 11: Left shoulder, 12: Right shoulder
+// 13: Left elbow, 14: Right elbow
+// 15: Left wrist, 16: Right wrist
+// 23: Left hip, 24: Right hip
+// We use the default POSE_CONNECTIONS but ensure arms connect properly
+// The issue was likely that arms were connecting to torso center instead of shoulders
 const CUSTOM_POSE_CONNECTIONS: [number, number][] = [
+  // Face connections (0-10) - keep all face connections from default
   ...POSE_CONNECTIONS.filter((conn: [number, number]) => {
     const [a, b] = conn
     return a < 11 && b < 11
   }),
-  [11, 23],
-  [12, 24],
-  [23, 24],
-  [11, 12],
-  [11, 13],
-  [13, 15],
-  [12, 14],
-  [14, 16],
+  // Torso: shoulders to hips (explicit connections)
+  [11, 23], // Left shoulder to left hip
+  [12, 24], // Right shoulder to right hip
+  [23, 24], // Left hip to right hip
+  [11, 12], // Left shoulder to right shoulder (across chest)
+  // Left arm: shoulder -> elbow -> wrist (explicit chain)
+  [11, 13], // Left shoulder to left elbow
+  [13, 15], // Left elbow to left wrist
+  // Right arm: shoulder -> elbow -> wrist (explicit chain)
+  [12, 14], // Right shoulder to right elbow
+  [14, 16], // Right elbow to right wrist
+  // Legs - keep all leg connections from default
   ...POSE_CONNECTIONS.filter((conn: [number, number]) => {
     const [a, b] = conn
     return a >= 23 || b >= 23
@@ -168,59 +166,61 @@ const configKonva = ref({
 const stage = ref<any>(null)
 const mainLayer = ref<any>(null)
 const skeletonCanvas = ref<HTMLCanvasElement | null>(null)
-const isSvgReady = ref(false)
+const isSvgReady = ref(false) // Track if SVG is properly positioned
 const startMode = ref(false)
 const endMode = ref(false)
 const selectedStarts = ref<string[]>([])
 const selectedEnd = ref<string | null>(null)
-const selectedNormalPositions = ref<Set<string>>(new Set())
-const replaceFirstStartNext = ref(false)
-const currentRoute = ref<Route | null>(null)
-const touchedHolds = ref<Map<string, number>>(new Map())
-const timeTextNodes = ref<Map<string, any>>(new Map())
+  const selectedNormalPositions = ref<Set<string>>(new Set())
+  const replaceFirstStartNext = ref(false) // Track which start to replace next when both are selected
+  const currentRoute = ref<Route | null>(null)
+  const touchedHolds = ref<Map<string, number>>(new Map()) // Track holds that have been touched in session mode: holdId -> time (in milliseconds)
+  const timeTextNodes = ref<Map<string, any>>(new Map()) // Store Konva Text nodes for time labels: holdId -> Text node
 
+// Recording state for session mode
 const isRecording = ref(false)
-const isPaused = ref(false)
 const recordingTime = ref('00:00')
 let recordingInterval: number | null = null
 let recordingStartTime = 0
-let pausedTime = 0
-let totalPausedDuration = 0
 
+// Skeleton drawing state
 const lastPoseData = ref<any[] | null>(null)
-const smoothedPoseData = ref<any[] | null>(null)
+const smoothedPoseData = ref<any[] | null>(null) // Smoothed pose data for better animation
 let skeletonCtx: CanvasRenderingContext2D | null = null
 let skeletonAnimationFrame: number | null = null
 let wsUnsubscribe: (() => void) | null = null
 let isSkeletonLoopRunning = false
-const SMOOTHING_FACTOR = 0.7
-const enableSmoothing = ref(false)
+const SMOOTHING_FACTOR = 0.7 // Smoothing factor for landmark positions (0-1, higher = more smoothing)
+const enableSmoothing = ref(false) // Toggle for enabling/disabling smoothing (default: linear tracking)
 
+// Buffering for smooth animation
 interface BufferedPoseFrame {
   landmarks: any[]
   timestamp: number
 }
 const poseBuffer: BufferedPoseFrame[] = []
-const BUFFER_SIZE = 3
-const INTERPOLATION_DELAY = 16
-const MAX_FRAME_AGE = 200
+const BUFFER_SIZE = 3 // Store last 3 frames
+const INTERPOLATION_DELAY = 16 // ~60 FPS (16ms per frame)
+const MAX_FRAME_AGE = 200 // Max age of frame in ms before considering it stale
 
+// Debug/performance tracking
 let wsMessageCount = 0
 let wsLastMessageTime = 0
 let wsMessageTimes: number[] = []
 let drawCount = 0
 let lastDrawTime = 0
 let drawTimes: number[] = []
-const DEBUG_SKELETON = false
+const DEBUG_SKELETON = true // Set to false to disable debug logs
 
-const zoomScale = ref(1)
-const baseScale = ref(1)
-const basePosition = ref({ x: 0, y: 0 })
-const panOffset = ref({ x: 0, y: 0 })
+// Pan and zoom state
+const zoomScale = ref(1) // User zoom multiplier (starts at 1)
+const baseScale = ref(1) // Base scale from scaleLayer
+const basePosition = ref({ x: 0, y: 0 }) // Base position from scaleLayer
+const panOffset = ref({ x: 0, y: 0 }) // User pan offset
 const isPanMode = ref(false)
 const isDragging = ref(false)
 const lastPointerPosition = ref({ x: 0, y: 0 })
-const minZoom = 1 / 1.2
+const minZoom = 1 / 1.2 // Allow only one level of zoom out from original (1.0)
 const maxZoom = 3
 
 let observer: ResizeObserver | null = null
@@ -228,8 +228,10 @@ let flipToastTimeout: ReturnType<typeof setTimeout> | null = null
 
 async function handleSave() {
   disablePanMode()
+  console.log('handleSave called', { currentRoute: currentRoute.value })
 
   if (!currentRoute.value || !currentRoute.value?.id) {
+    console.warn('No route to save')
     toast.add({
       severity: 'warn',
       summary: 'Warning',
@@ -239,6 +241,7 @@ async function handleSave() {
     return
   }
 
+  // Check if route has no grade - show grade selection dialog
   const hasGrade = currentRoute.value.data?.grade && currentRoute.value.data.grade.trim() !== ''
   if (!hasGrade) {
     dialog.open(CreateBoulderDialog, {
@@ -257,6 +260,7 @@ async function handleSave() {
       onClose: async (result) => {
         const data = result?.data
         if (data && data.grade) {
+          // Update route with grade and save
           await performSave(data.grade)
         }
       }
@@ -264,6 +268,7 @@ async function handleSave() {
     return
   }
 
+  // Route has grade, proceed with normal save
   await performSave()
 }
 
@@ -295,9 +300,12 @@ async function performSave(grade?: ClimbingRouteGrade) {
     },
   }
 
+  console.log('Saving route:', updatedRoute)
+
   try {
     await routesStore.saveRoute(updatedRoute)
     currentRoute.value = updatedRoute
+    console.log('Route saved successfully')
     toast.add({
       severity: 'success',
       summary: 'Success',
@@ -305,6 +313,7 @@ async function performSave(grade?: ClimbingRouteGrade) {
       life: 3000
     })
   } catch (error) {
+    console.error('Failed to save route:', error)
     toast.add({
       severity: 'error',
       summary: 'Error',
@@ -374,6 +383,7 @@ function handleEditInfo() {
             life: 3000
           })
         } catch (error) {
+          console.error('Failed to update route:', error)
           toast.add({
             severity: 'error',
             summary: 'Error',
@@ -390,39 +400,52 @@ function flipId(id: string): string {
   const numId = parseInt(id, 10)
 
   if (isNaN(numId)) {
-    return id
+    return id // Return as-is if not a number
   }
 
+  // Left side (0-99, up to 100) -> Right side (100-199)
   if (numId >= 0 && numId < 100) {
     return String(numId + 100)
-  } else if (numId >= 100 && numId < 200) {
+  }
+  // Right side (100-199, from 100 to 200) -> Left side (0-99)
+  else if (numId >= 100 && numId < 200) {
     return String(numId - 100)
-  } else {
+  }
+  // Middle elements (>= 200) stay the same
+  else {
     return id
   }
 }
 
 function handleFlip() {
   disablePanMode()
+  // Flip start holds
   selectedStarts.value = selectedStarts.value.map(id => flipId(id))
 
+  // Flip end hold
   if (selectedEnd.value) {
     selectedEnd.value = flipId(selectedEnd.value)
   }
 
+  // Flip normal holds
   const flippedNormal = new Set<string>()
   selectedNormalPositions.value.forEach(id => {
     flippedNormal.add(flipId(id))
   })
   selectedNormalPositions.value = flippedNormal
 
+  // Update the visual representation
   updatePathColors()
+
+  // Preview the flipped route
   preview()
 
+  // Clear any pending toast notification
   if (flipToastTimeout) {
     clearTimeout(flipToastTimeout)
   }
 
+  // Debounce the toast notification
   flipToastTimeout = setTimeout(() => {
     toast.add({
       severity: 'success',
@@ -464,11 +487,7 @@ function handleRelay() {
 }
 
 function handlePause() {
-  if (isRecording.value && !isPaused.value) {
-    pauseRecording()
-  } else if (isRecording.value && isPaused.value) {
-    resumeRecording()
-  }
+  websocketService.sendSessionAction('pause')
 }
 
 function toggleRecording() {
@@ -481,37 +500,10 @@ function toggleRecording() {
 
 function startRecording() {
   isRecording.value = true
-  isPaused.value = false
   recordingStartTime = Date.now()
-  totalPausedDuration = 0
   
   recordingInterval = window.setInterval(() => {
-    const elapsed = Math.floor((Date.now() - recordingStartTime - totalPausedDuration) / 1000)
-    const minutes = Math.floor(elapsed / 60)
-    const seconds = elapsed % 60
-    recordingTime.value = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-  }, 1000)
-}
-
-function pauseRecording() {
-  if (!isRecording.value || isPaused.value) return
-  isPaused.value = true
-  pausedTime = Date.now()
-  if (recordingInterval !== null) {
-    clearInterval(recordingInterval)
-    recordingInterval = null
-  }
-}
-
-function resumeRecording() {
-  if (!isRecording.value || !isPaused.value) return
-  isPaused.value = false
-  const pauseDuration = Date.now() - pausedTime
-  totalPausedDuration += pauseDuration
-  pausedTime = 0
-  
-  recordingInterval = window.setInterval(() => {
-    const elapsed = Math.floor((Date.now() - recordingStartTime - totalPausedDuration) / 1000)
+    const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000)
     const minutes = Math.floor(elapsed / 60)
     const seconds = elapsed % 60
     recordingTime.value = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
@@ -520,18 +512,16 @@ function resumeRecording() {
 
 function stopRecording() {
   isRecording.value = false
-  isPaused.value = false
   if (recordingInterval !== null) {
     clearInterval(recordingInterval)
     recordingInterval = null
   }
   recordingTime.value = '00:00'
-  totalPausedDuration = 0
-  pausedTime = 0
 }
 
 function activateStartMode() {
   disablePanMode()
+  // Toggle start mode - if already active, turn it off
   if (startMode.value) {
     startMode.value = false
   } else {
@@ -542,6 +532,7 @@ function activateStartMode() {
 
 function activateEndMode() {
   disablePanMode()
+  // Toggle end mode - if already active, turn it off
   if (endMode.value) {
     endMode.value = false
   } else {
@@ -587,19 +578,22 @@ function isWideScreen(width?: number, height?: number) {
   isTablet.value = viewportWidth >= 640 && viewportWidth < 1024
   isLandscape.value = viewportWidth > viewportHeight
 
-    if (stage.value && mainLayer.value) {
+  if (stage.value && mainLayer.value) {
     const konvaStage = stage.value.getNode()
     scaleLayer(mainLayer.value, konvaStage)
 
+    // Update base scale and position after resize
     baseScale.value = mainLayer.value.scaleX()
     basePosition.value = {
       x: mainLayer.value.x(),
       y: mainLayer.value.y(),
     }
 
+    // Reapply transform with new base values
     applyTransform()
     konvaStage.draw()
 
+    // Update skeleton canvas size to match SVG
     if (isSessionRoute.value) {
       updateSkeletonCanvasSize()
     }
@@ -614,9 +608,10 @@ onMounted(async () => {
   const routeId = route.query.id ? Number(route.query.id) : null
   if (routeId) {
     await routesStore.getRoutes()
-      const routeToEdit = routesStore.routes.find((r) => r.id === routeId)
-      if (routeToEdit) {
-        currentRoute.value = routeToEdit
+    const routeToEdit = routesStore.routes.find((r) => r.id === routeId)
+    if (routeToEdit) {
+      currentRoute.value = routeToEdit
+      console.log('Route loaded:', routeToEdit.name, routeToEdit.data.grade)
 
       if (routeToEdit.data?.problem?.holds) {
         routeToEdit.data.problem.holds.forEach((hold) => {
@@ -632,6 +627,7 @@ onMounted(async () => {
     }
   }
 
+  // Wait for container to be ready and set stage size before loading SVG
   const initializeStage = async () => {
     if (!innerbox.value || !stage.value) {
       setTimeout(initializeStage, 50)
@@ -642,21 +638,29 @@ onMounted(async () => {
     const containerWidth = container.clientWidth
     const containerHeight = container.clientHeight
 
+    // Wait for container to have valid dimensions
     if (containerWidth === 0 || containerHeight === 0) {
       setTimeout(initializeStage, 50)
       return
     }
 
+    // Set stage size first
     isWideScreen()
+    
+    // Wait for next tick to ensure stage size is applied
     await nextTick()
     
+    // Double-check stage has correct size
     const konvaStage = stage.value.getNode()
     if (konvaStage.width() === 0 || konvaStage.height() === 0) {
       setTimeout(initializeStage, 50)
       return
     }
 
+    // Now load and position SVG
     await initKonva()
+    
+    // Update path colors after SVG is loaded
     setTimeout(() => {
       updatePathColors()
     }, 50)
@@ -666,9 +670,11 @@ onMounted(async () => {
 
   handleResize = () => {
     isWideScreen()
+    // Update landscape orientation
     isLandscape.value = window.innerWidth > window.innerHeight
   }
   window.addEventListener('resize', handleResize)
+  // Initialize landscape state
   isLandscape.value = window.innerWidth > window.innerHeight
 
   observer = new ResizeObserver(() => {
@@ -691,6 +697,7 @@ onMounted(async () => {
     }
   }, 100)
 
+  // Setup WebSocket for session mode
   if (isSessionRoute.value) {
     setupWebSocket()
     nextTick(() => {
@@ -713,22 +720,25 @@ onBeforeUnmount(() => {
     skeletonAnimationFrame = null
   }
   isSkeletonLoopRunning = false
-  poseBuffer.length = 0
-  touchedHolds.value.clear()
+  poseBuffer.length = 0 // Clear buffer
+  touchedHolds.value.clear() // Clear touched holds
+  // Remove all time text nodes
   timeTextNodes.value.forEach((textNode) => {
     textNode.destroy()
   })
   timeTextNodes.value.clear()
-  smoothedPoseData.value = null
-  stopRecording()
+  smoothedPoseData.value = null // Clear smoothed data
+  stopRecording() // Stop recording if active
+  // Only disconnect if we're leaving session mode
   if (!isSessionRoute.value) {
     websocketService.disconnect()
   }
 })
 
 function handlePathClick(pathId: string) {
+  // Deselect pan mode when clicking on a path
   if (isPanMode.value) {
-    return
+    togglePanMode()
   }
 
   if (startMode.value) {
@@ -744,8 +754,10 @@ function handlePathClick(pathId: string) {
 function handleStartSelection(pathId: string) {
   const index = selectedStarts.value.indexOf(pathId)
 
+  // If clicking an already selected start, deselect it
   if (index > -1) {
     selectedStarts.value.splice(index, 1)
+    // Reset cycling when deselecting
     if (selectedStarts.value.length < 2) {
       replaceFirstStartNext.value = false
     }
@@ -753,25 +765,36 @@ function handleStartSelection(pathId: string) {
     return
   }
 
+  // Remove from normal positions if it was selected as normal
   selectedNormalPositions.value.delete(pathId)
+  // Remove from end position if it was selected as end
   if (selectedEnd.value === pathId) {
     selectedEnd.value = null
   }
 
+  // If no starts selected, add first start
   if (selectedStarts.value.length === 0) {
     selectedStarts.value.push(pathId)
     replaceFirstStartNext.value = false
-  } else if (selectedStarts.value.length === 1) {
+  }
+  // If one start selected, add second start
+  else if (selectedStarts.value.length === 1) {
     selectedStarts.value.push(pathId)
     replaceFirstStartNext.value = false
-  } else if (selectedStarts.value.length === 2) {
+    // Keep start mode active - user must manually turn it off
+  }
+  // If both starts selected, cycle between replacing first and second
+  else if (selectedStarts.value.length === 2) {
     if (replaceFirstStartNext.value) {
+      // Replace the first start
       selectedStarts.value[0] = pathId
       replaceFirstStartNext.value = false
     } else {
+      // Replace the second (last) start
       selectedStarts.value[1] = pathId
       replaceFirstStartNext.value = true
     }
+    // Keep start mode active - user must manually turn it off
   }
 
   updatePathColors()
@@ -784,14 +807,18 @@ function handleEndSelection(pathId: string) {
     return
   }
 
+  // Remove from normal positions if it was selected as normal
   selectedNormalPositions.value.delete(pathId)
+  // Remove from start positions if it was selected as start
   const startIndex = selectedStarts.value.indexOf(pathId)
   if (startIndex > -1) {
     selectedStarts.value.splice(startIndex, 1)
   }
 
   selectedEnd.value = pathId
+
   endMode.value = false
+
   updatePathColors()
 }
 
@@ -820,6 +847,7 @@ function handleNormalSelection(pathId: string) {
 }
 
 function formatTime(timeMs: number): string {
+  // Convert milliseconds to MM:SS format
   const totalSeconds = Math.floor(timeMs / 1000)
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = totalSeconds % 60
@@ -833,6 +861,7 @@ function updatePathColors() {
   const children = mainLayer.value.children
   if (!children) return
 
+  // Remove old time text nodes for holds that are no longer touched
   const currentTouchedIds = new Set<string>()
   touchedHolds.value.forEach((_, holdId) => {
     currentTouchedIds.add(holdId)
@@ -852,6 +881,7 @@ function updatePathColors() {
     const isEnd = selectedEnd.value === pathId
     const isNormalSelected = selectedNormalPositions.value.has(pathId)
     
+    // Check if touched - try both pathId and with "hold_" prefix
     let touchedTime: number | null = null
     if (isSessionRoute.value) {
       touchedTime = touchedHolds.value.get(pathId) || touchedHolds.value.get(`hold_${pathId}`) || null
@@ -859,15 +889,18 @@ function updatePathColors() {
     const isTouched = touchedTime !== null
 
     if (isTouched) {
+      // Transparent green for touched holds in session mode
       node.fill('rgba(0, 255, 0, 0.3)')
       node.opacity(1)
       node.strokeWidth(0)
       node.stroke('transparent')
 
+      // Create or update time text label
       const textId = `time_${pathId}`
       let timeText = timeTextNodes.value.get(textId)
       
       if (!timeText) {
+        // Create new text node
         const box = node.getClientRect()
         const centerX = box.x + box.width / 2
         const centerY = box.y + box.height / 2
@@ -881,7 +914,7 @@ function updatePathColors() {
           stroke: '#ffffff',
           strokeWidth: 2,
           x: centerX,
-          y: centerY - 10,
+          y: centerY - 10, // Position slightly above center
           align: 'center',
           verticalAlign: 'middle',
           offsetX: 0,
@@ -890,12 +923,14 @@ function updatePathColors() {
           perfectDrawEnabled: false,
         })
 
+        // Calculate text width for proper centering
         timeText.offsetX(timeText.width() / 2)
         timeText.offsetY(timeText.height() / 2)
 
         mainLayer.value.add(timeText)
         timeTextNodes.value.set(textId, timeText)
       } else {
+        // Update existing text node
         timeText.text(formatTime(touchedTime!))
         const box = node.getClientRect()
         const centerX = box.x + box.width / 2
@@ -924,6 +959,7 @@ function updatePathColors() {
   konvaStage.draw()
 }
 
+// Pan and zoom functions
 function constrainPanOffset() {
   if (!mainLayer.value || !stage.value) return
 
@@ -932,22 +968,41 @@ function constrainPanOffset() {
   const stageHeight = konvaStage.height()
   const finalScale = baseScale.value * zoomScale.value
 
+  // Calculate the scaled SVG dimensions
   const scaledWidth = constants.WALL_WIDTH_MM * finalScale
   const scaledHeight = constants.WALL_HEIGHT_MM * finalScale
 
+  // Only constrain if the scaled SVG is larger than the stage (zoomed in)
+  // If zoomed out, the SVG should stay centered
   if (scaledWidth <= stageWidth && scaledHeight <= stageHeight) {
+    // When zoomed out, keep centered (pan offset should be 0)
     panOffset.value = { x: 0, y: 0 }
     return
   }
 
+  // When zoomed in, allow panning but keep at least 10% visible on each side
   const minVisibleWidth = scaledWidth * 0.1
   const minVisibleHeight = scaledHeight * 0.1
 
+  // The layer center position is: basePosition + panOffset
+  // The layer left edge is: (basePosition.x + panOffset.x) - scaledWidth/2
+  // The layer right edge is: (basePosition.x + panOffset.x) + scaledWidth/2
+
+  // We want the left edge to be at most minVisibleWidth off-screen to the left
+  // So: (basePosition.x + panOffset.x) - scaledWidth/2 >= -minVisibleWidth
+  // Solving for panOffset.x: panOffset.x >= -minVisibleWidth - basePosition.x + scaledWidth/2
   const minPanX = -minVisibleWidth - basePosition.value.x + scaledWidth / 2
+
+  // We want the right edge to be at most minVisibleWidth off-screen to the right
+  // So: (basePosition.x + panOffset.x) + scaledWidth/2 <= stageWidth + minVisibleWidth
+  // Solving for panOffset.x: panOffset.x <= stageWidth + minVisibleWidth - basePosition.x - scaledWidth/2
   const maxPanX = stageWidth + minVisibleWidth - basePosition.value.x - scaledWidth / 2
+
+  // Same for Y axis
   const minPanY = -minVisibleHeight - basePosition.value.y + scaledHeight / 2
   const maxPanY = stageHeight + minVisibleHeight - basePosition.value.y - scaledHeight / 2
 
+  // Only clamp if the range is valid (min < max)
   if (minPanX < maxPanX) {
     panOffset.value.x = Math.max(minPanX, Math.min(maxPanX, panOffset.value.x))
   }
@@ -960,23 +1015,30 @@ function applyTransform() {
   if (!mainLayer.value || !stage.value) return
 
   const konvaStage = stage.value.getNode()
+  // Apply base scale * zoom scale
   const finalScale = baseScale.value * zoomScale.value
 
+  // Constrain pan offset before applying (only if not actively dragging to allow smooth panning)
   if (!isDragging.value) {
     constrainPanOffset()
   }
 
   mainLayer.value.scale({ x: finalScale, y: finalScale })
+
+  // Apply base position + pan offset
   mainLayer.value.position({
     x: basePosition.value.x + panOffset.value.x,
     y: basePosition.value.y + panOffset.value.y,
   })
 
+  // Update time text positions when transform changes
   if (isSessionRoute.value && timeTextNodes.value.size > 0) {
     updateTimeTextPositions()
   }
 
   konvaStage.draw()
+
+  // Redraw skeleton if in session mode (skeleton will be redrawn in animation loop)
 }
 
 function updateTimeTextPositions() {
@@ -986,6 +1048,7 @@ function updateTimeTextPositions() {
   if (!children) return
 
   timeTextNodes.value.forEach((timeText, textId) => {
+    // Extract pathId from textId (format: "time_0", "time_1", etc.)
     const pathId = textId.replace('time_', '')
     const pathNode = mainLayer.value.findOne(`#${pathId}`)
     
@@ -1022,35 +1085,52 @@ function handleReset() {
   const containerHeight = container.clientHeight
 
   if (containerWidth === 0 || containerHeight === 0) {
+    // Wait for container to be ready
     setTimeout(() => handleReset(), 50)
     return
   }
 
+  // Hide SVG during reset to prevent jumping
   isSvgReady.value = false
+
+  // Reset zoom and pan values first
   zoomScale.value = 1
   panOffset.value = { x: 0, y: 0 }
+
+  // Update configKonva to ensure reactive stage size is correct
   configKonva.value.width = containerWidth
   configKonva.value.height = containerHeight
 
+  // Wait for next tick to ensure Vue-Konva has updated the stage size
   nextTick(() => {
     if (!mainLayer.value || !stage.value) return
 
     const updatedStage = stage.value.getNode()
 
+    // Ensure stage size matches container (in case Vue-Konva hasn't updated)
     if (updatedStage.width() !== containerWidth || updatedStage.height() !== containerHeight) {
       updatedStage.width(containerWidth)
       updatedStage.height(containerHeight)
     }
 
+    // Recalculate base scale and position by calling scaleLayer
+    // This will center the SVG at stage.width()/2, stage.height()/2
     scaleLayer(mainLayer.value, updatedStage)
+
+    // Update base scale and position after scaleLayer
     baseScale.value = mainLayer.value.scaleX()
     basePosition.value = {
       x: mainLayer.value.x(),
       y: mainLayer.value.y(),
     }
 
+    // Ensure pan offset is still 0
     panOffset.value = { x: 0, y: 0 }
+
+    // Apply transform - this will position the layer at basePosition (centered)
     applyTransform()
+    
+    // Show SVG again after reset is complete
     isSvgReady.value = true
   })
 }
@@ -1058,6 +1138,7 @@ function handleReset() {
 function togglePanMode() {
   isPanMode.value = !isPanMode.value
   isDragging.value = false
+  // Don't make the stage draggable - we handle panning through mouse events on the layer
   if (stage.value) {
     const konvaStage = stage.value.getNode()
     konvaStage.draggable(false)
@@ -1092,11 +1173,13 @@ function handleWheel(e: WheelEvent) {
   const delta = e.deltaY > 0 ? 0.9 : 1.1
   zoomScale.value = Math.max(minZoom, Math.min(zoomScale.value * delta, maxZoom))
 
+  // Calculate zoom point in layer coordinates
   const layerPoint = {
     x: (pointer.x - basePosition.value.x - panOffset.value.x) / (baseScale.value * oldZoom),
     y: (pointer.y - basePosition.value.y - panOffset.value.y) / (baseScale.value * oldZoom),
   }
 
+  // Adjust pan offset to keep the zoom point under the mouse
   panOffset.value = {
     x: pointer.x - layerPoint.x * (baseScale.value * zoomScale.value) - basePosition.value.x,
     y: pointer.y - layerPoint.y * (baseScale.value * zoomScale.value) - basePosition.value.y,
@@ -1105,40 +1188,47 @@ function handleWheel(e: WheelEvent) {
   applyTransform()
 }
 
-function handleMouseDown(e: MouseEvent | any) {
+function handleMouseDown(e: MouseEvent) {
   if (!isPanMode.value || !stage.value || !mainLayer.value) return
-  if (e.button !== undefined && e.button !== 0) return
 
+  // Only pan with left mouse button
+  if (e.button !== 0) return
+
+  // Check if clicking on a path - if so, don't pan
   const konvaStage = stage.value.getNode()
   const pointer = konvaStage.getPointerPosition()
   if (!pointer) return
 
-  isDragging.value = true
-  lastPointerPosition.value = {
-    x: pointer.x,
-    y: pointer.y,
+  const clickedOnShape = konvaStage.getIntersection(pointer)
+  if (clickedOnShape && clickedOnShape !== konvaStage && clickedOnShape !== mainLayer.value) {
+    // Clicked on a shape (path), let the normal click handler work
+    return
   }
-  if (e.preventDefault) e.preventDefault()
-  if (e.stopPropagation) e.stopPropagation()
-  if (e.evt && e.evt.preventDefault) e.evt.preventDefault()
-  if (e.evt && e.evt.stopPropagation) e.evt.stopPropagation()
+
+  isDragging.value = true
+  const stageBox = konvaStage.container().getBoundingClientRect()
+  lastPointerPosition.value = {
+    x: e.clientX - stageBox.left,
+    y: e.clientY - stageBox.top,
+  }
+  e.preventDefault()
+  e.stopPropagation()
 }
 
-function handleMouseMove(e: MouseEvent | any) {
+function handleMouseMove(e: MouseEvent) {
   if (!isPanMode.value || !isDragging.value || !stage.value || !mainLayer.value) return
 
   const konvaStage = stage.value.getNode()
-  const pointer = konvaStage.getPointerPosition()
-  if (!pointer) return
-
+  const stageBox = konvaStage.container().getBoundingClientRect()
   const newPointerPosition = {
-    x: pointer.x,
-    y: pointer.y,
+    x: e.clientX - stageBox.left,
+    y: e.clientY - stageBox.top,
   }
 
   const dx = newPointerPosition.x - lastPointerPosition.value.x
   const dy = newPointerPosition.y - lastPointerPosition.value.y
 
+  // Update pan offset to move the layer (not the stage)
   panOffset.value = {
     x: panOffset.value.x + dx,
     y: panOffset.value.y + dy,
@@ -1146,71 +1236,13 @@ function handleMouseMove(e: MouseEvent | any) {
 
   lastPointerPosition.value = newPointerPosition
   applyTransform()
-  if (e.preventDefault) e.preventDefault()
-  if (e.stopPropagation) e.stopPropagation()
-  if (e.evt && e.evt.preventDefault) e.evt.preventDefault()
-  if (e.evt && e.evt.stopPropagation) e.evt.stopPropagation()
+  e.preventDefault()
+  e.stopPropagation()
 }
 
 function handleMouseUp() {
   isDragging.value = false
-  if (mainLayer.value && stage.value) {
-    constrainPanOffset()
-    applyTransform()
-  }
-}
-
-function handleTouchStart(e: any) {
-  if (!isPanMode.value || !stage.value || !mainLayer.value) return
-
-  const konvaStage = stage.value.getNode()
-  const pointer = konvaStage.getPointerPosition()
-  if (!pointer) return
-
-  isDragging.value = true
-  lastPointerPosition.value = {
-    x: pointer.x,
-    y: pointer.y,
-  }
-  if (e.evt) {
-    e.evt.preventDefault()
-    e.evt.stopPropagation()
-  }
-}
-
-function handleTouchMove(e: any) {
-  if (!isPanMode.value || !isDragging.value || !stage.value || !mainLayer.value) return
-
-  const konvaStage = stage.value.getNode()
-  const pointer = konvaStage.getPointerPosition()
-  if (!pointer) {
-    isDragging.value = false
-    return
-  }
-
-  const newPointerPosition = {
-    x: pointer.x,
-    y: pointer.y,
-  }
-
-  const dx = newPointerPosition.x - lastPointerPosition.value.x
-  const dy = newPointerPosition.y - lastPointerPosition.value.y
-
-  panOffset.value = {
-    x: panOffset.value.x + dx,
-    y: panOffset.value.y + dy,
-  }
-
-  lastPointerPosition.value = newPointerPosition
-  applyTransform()
-  if (e.evt) {
-    e.evt.preventDefault()
-    e.evt.stopPropagation()
-  }
-}
-
-function handleTouchEnd() {
-  isDragging.value = false
+  // Apply constraints after dragging ends
   if (mainLayer.value && stage.value) {
     constrainPanOffset()
     applyTransform()
@@ -1222,14 +1254,18 @@ async function initKonva() {
 
   const konvaStage = stage.value.getNode()
   const container = innerbox.value as HTMLElement
+  
+  // Ensure stage size matches container
   const containerWidth = container.clientWidth
   const containerHeight = container.clientHeight
   
   if (containerWidth === 0 || containerHeight === 0) {
+    console.warn('Container not ready, retrying initKonva')
     setTimeout(() => initKonva(), 50)
     return
   }
 
+  // Ensure stage size is correct before loading SVG
   if (konvaStage.width() !== containerWidth || konvaStage.height() !== containerHeight) {
     configKonva.value.width = containerWidth
     configKonva.value.height = containerHeight
@@ -1237,57 +1273,74 @@ async function initKonva() {
     konvaStage.height(containerHeight)
   }
 
+  // Load SVG
   mainLayer.value = await loadWallSvg(
     handlePathClick,
     selectedStarts.value,
     selectedEnd.value
   )
 
+  // Wait for next tick to ensure stage is fully initialized
   await nextTick()
+
+  // Scale and position SVG - this centers it immediately
   scaleLayer(mainLayer.value, konvaStage)
 
+  // Store base scale and position after scaleLayer
   baseScale.value = mainLayer.value.scaleX()
   basePosition.value = {
     x: mainLayer.value.x(),
     y: mainLayer.value.y(),
   }
 
+  // Add layer to stage
   konvaStage.add(mainLayer.value)
+
+  // Initialize transform before drawing to prevent jump
   zoomScale.value = 1
   panOffset.value = { x: 0, y: 0 }
   applyTransform()
+  
+  // Draw once everything is positioned correctly
   konvaStage.draw()
+
+  // Show SVG now that it's properly positioned
   isSvgReady.value = true
 
+  // Attach event listeners to the stage container
   const stageContainer = konvaStage.container()
+  // Only add wheel zoom listener for non-session routes
   if (!isSessionRoute.value) {
     stageContainer.addEventListener('wheel', handleWheel, { passive: false })
   }
-  
-  konvaStage.on('mousedown', handleMouseDown)
-  konvaStage.on('mousemove', handleMouseMove)
-  konvaStage.on('mouseup', handleMouseUp)
-  konvaStage.on('mouseleave', handleMouseUp)
-  konvaStage.on('touchstart', handleTouchStart)
-  konvaStage.on('touchmove', handleTouchMove)
-  konvaStage.on('touchend', handleTouchEnd)
-  konvaStage.on('touchcancel', handleTouchEnd)
+  stageContainer.addEventListener('mousedown', handleMouseDown)
+  stageContainer.addEventListener('mousemove', handleMouseMove)
+  stageContainer.addEventListener('mouseup', handleMouseUp)
+  stageContainer.addEventListener('mouseleave', handleMouseUp)
 }
 
+// Expose smoothing toggle to window for testing
 if (typeof window !== 'undefined') {
   (window as any).togglePoseSmoothing = () => {
     enableSmoothing.value = !enableSmoothing.value
+    console.log(`Pose smoothing ${enableSmoothing.value ? 'ENABLED' : 'DISABLED'} (linear tracking)`)
     return enableSmoothing.value
   }
   (window as any).setPoseSmoothing = (enabled: boolean) => {
     enableSmoothing.value = enabled
+    console.log(`Pose smoothing ${enableSmoothing.value ? 'ENABLED' : 'DISABLED'} (linear tracking)`)
     return enableSmoothing.value
   }
+  console.log('Pose smoothing controls available:')
+  console.log('  window.togglePoseSmoothing() - toggle smoothing on/off')
+  console.log('  window.setPoseSmoothing(true/false) - set smoothing state')
 }
 
+// Skeleton drawing functions
 function setupWebSocket() {
   if (!isSessionRoute.value) return
 
+  // Use the service to connect to session WebSocket
   wsUnsubscribe = websocketService.connectSession({
     onHolds: (holds: any[]) => {
       const newTouchedHolds = new Map<string, number>()
@@ -1295,38 +1348,92 @@ function setupWebSocket() {
       holds.forEach((hold: any) => {
         if (!hold.id) return
         
+        // Extract hold ID - try both with and without "hold_" prefix
+        // SVG paths have IDs like "0", "1", etc. (extracted from "hold_0", "hold_1")
         let holdId = hold.id
         if (holdId.startsWith('hold_')) {
           holdId = holdId.replace('hold_', '')
         }
         
+        // Check if hold is touched (status is "touched" and has time)
         if (hold.status === 'touched' && hold.time !== null && hold.time !== undefined) {
+          // Store time in milliseconds (assuming time comes in milliseconds from server)
+          // If time comes in seconds, multiply by 1000
           const timeMs = typeof hold.time === 'number' ? hold.time : parseFloat(hold.time) || 0
           newTouchedHolds.set(holdId, timeMs)
+          // Also store with "hold_" prefix for matching
           newTouchedHolds.set(`hold_${holdId}`, timeMs)
         }
       })
       
+      // Update touched holds
       touchedHolds.value = newTouchedHolds
+      
+      // Update path colors to reflect touched holds
       updatePathColors()
     },
     onPose: (landmarks: any[]) => {
       const now = performance.now()
 
+      // Store latest landmarks
       lastPoseData.value = landmarks
 
+      // Add to buffer for smooth interpolation
       poseBuffer.push({
         landmarks: landmarks,
         timestamp: now
       })
 
+      // Keep buffer size limited
       if (poseBuffer.length > BUFFER_SIZE) {
         poseBuffer.shift()
       }
 
+      // Start continuous animation loop if not already running
       if (!isSkeletonLoopRunning) {
         isSkeletonLoopRunning = true
+        if (DEBUG_SKELETON) {
+          console.log('[Skeleton Debug] Starting animation loop')
+        }
         skeletonAnimationLoop()
+      }
+
+      // Debug tracking (async to not block message processing)
+      if (DEBUG_SKELETON) {
+        // Use setTimeout with 0 delay to defer debug work
+        setTimeout(() => {
+          wsMessageCount++
+          const timeSinceLastMessage = wsLastMessageTime > 0 ? now - wsLastMessageTime : 0
+          wsLastMessageTime = now
+          wsMessageTimes.push(timeSinceLastMessage)
+
+          // Keep only last 60 timings (about 1 second at 60fps)
+          if (wsMessageTimes.length > 60) {
+            wsMessageTimes.shift()
+          }
+
+          // Log stats every 30 messages
+          if (wsMessageCount % 30 === 0) {
+            const avgTime = wsMessageTimes.reduce((a, b) => a + b, 0) / wsMessageTimes.length
+            const minTime = Math.min(...wsMessageTimes.filter(t => t > 0))
+            const maxTime = Math.max(...wsMessageTimes)
+            const fps = avgTime > 0 ? (1000 / avgTime).toFixed(1) : 'N/A'
+            console.log('[Skeleton Debug] WebSocket:', {
+              messageCount: wsMessageCount,
+              avgInterval: `${avgTime.toFixed(2)}ms`,
+              minInterval: `${minTime.toFixed(2)}ms`,
+              maxInterval: `${maxTime.toFixed(2)}ms`,
+              estimatedFPS: fps,
+              bufferSize: poseBuffer.length,
+            })
+
+            console.log('[Skeleton Debug] Landmarks received:', {
+              count: landmarks.length,
+              firstLandmark: landmarks[0],
+              timestamp: now,
+            })
+          }
+        }, 0)
       }
     }
   })
@@ -1345,11 +1452,14 @@ function updateSkeletonCanvasSize() {
   if (containerWidth > 0 && containerHeight > 0) {
     skeletonCanvas.value.width = containerWidth
     skeletonCanvas.value.height = containerHeight
+    // Get and cache the context
     skeletonCtx = skeletonCanvas.value.getContext('2d')
   }
 }
 
 function interpolateLandmarks(frame1: any[], frame2: any[], t: number): any[] {
+  // Interpolate between two frames
+  // t is interpolation factor (0 = frame1, 1 = frame2)
   if (!frame1 || !frame2 || frame1.length !== frame2.length) {
     return frame1 || frame2 || []
   }
@@ -1368,6 +1478,7 @@ function interpolateLandmarks(frame1: any[], frame2: any[], t: number): any[] {
 }
 
 function getInterpolatedPose(): any[] | null {
+  // On session route, use latest frame from buffer (linear tracking, no interpolation)
   if (isSessionRoute.value) {
     if (poseBuffer.length > 0) {
       const latestFrame = poseBuffer[poseBuffer.length - 1]
@@ -1378,6 +1489,7 @@ function getInterpolatedPose(): any[] | null {
 
   const now = performance.now()
 
+  // Clean up stale frames from buffer
   while (poseBuffer.length > 0) {
     const oldestFrame = poseBuffer[0]
     if (oldestFrame && now - oldestFrame.timestamp > MAX_FRAME_AGE * 2) {
@@ -1393,12 +1505,14 @@ function getInterpolatedPose(): any[] | null {
 
   if (poseBuffer.length === 1) {
     const frame = poseBuffer[0]
+    // If frame is too old, don't use it
     if (!frame || (frame && now - frame.timestamp > MAX_FRAME_AGE)) {
       return lastPoseData.value
     }
     return frame.landmarks || lastPoseData.value
   }
 
+  // Get the two most recent frames
   const frame1 = poseBuffer[poseBuffer.length - 2]
   const frame2 = poseBuffer[poseBuffer.length - 1]
 
@@ -1406,10 +1520,12 @@ function getInterpolatedPose(): any[] | null {
     return lastPoseData.value
   }
 
+  // If frames are too old, just use the latest
   if (now - frame2.timestamp > MAX_FRAME_AGE) {
     return frame2.landmarks
   }
 
+  // Calculate interpolation factor based on time since last frame
   const timeSinceFrame1 = now - frame1.timestamp
   const timeBetweenFrames = frame2.timestamp - frame1.timestamp
 
@@ -1417,7 +1533,10 @@ function getInterpolatedPose(): any[] | null {
     return frame2.landmarks
   }
 
+  // Interpolate between frames (0 = frame1, 1 = frame2)
+  // Clamp t to prevent extrapolation beyond frame2
   const t = Math.min(1, Math.max(0, timeSinceFrame1 / timeBetweenFrames))
+
   return interpolateLandmarks(frame1.landmarks, frame2.landmarks, t)
 }
 
@@ -1430,19 +1549,25 @@ function transformLandmarks(landmarks: any[]): any[] {
   const canvas = skeletonCanvas.value
   const finalScale = baseScale.value * zoomScale.value
 
+  // Calculate the scaled SVG dimensions
   const scaledWidth = constants.WALL_WIDTH_MM * finalScale
   const scaledHeight = constants.WALL_HEIGHT_MM * finalScale
 
+  // Calculate layer position
   const layerX = basePosition.value.x + panOffset.value.x
   const layerY = basePosition.value.y + panOffset.value.y
 
+  // Calculate layer bounds
   const leftEdge = layerX - scaledWidth / 2
   const topEdge = layerY - scaledHeight / 2
 
+  // Transform landmarks from normalized wall coordinates (0-1) to canvas coordinates (0-1)
   return landmarks.map((lm: any) => {
+    // Convert from normalized wall coordinates to pixel coordinates in the layer
     const pixelX = leftEdge + (lm.x * scaledWidth)
     const pixelY = topEdge + (lm.y * scaledHeight)
 
+    // Normalize to canvas coordinates (0-1) for MediaPipe drawing utilities
     return {
       x: pixelX / canvas.width,
       y: pixelY / canvas.height,
@@ -1453,16 +1578,19 @@ function transformLandmarks(landmarks: any[]): any[] {
 }
 
 function smoothLandmarks(newLandmarks: any[]): any[] {
+  // If smoothing is disabled, return landmarks directly (linear tracking)
   if (!enableSmoothing.value) {
     smoothedPoseData.value = newLandmarks.map(lm => ({ ...lm }))
     return newLandmarks
   }
 
   if (!smoothedPoseData.value || smoothedPoseData.value.length !== newLandmarks.length) {
+    // Initialize smoothed data
     smoothedPoseData.value = newLandmarks.map(lm => ({ ...lm }))
     return newLandmarks
   }
 
+  // Apply exponential smoothing to each landmark
   return newLandmarks.map((lm, i) => {
     const prev = smoothedPoseData.value![i]
     if (!prev) return lm
@@ -1477,12 +1605,15 @@ function smoothLandmarks(newLandmarks: any[]): any[] {
 }
 
 function drawSkeleton(landmarks: any[]) {
+  const drawStartTime = performance.now()
+
   if (!skeletonCanvas.value || !landmarks || landmarks.length === 0 || !skeletonCtx) {
     return
   }
 
   const canvas = skeletonCanvas.value
 
+  // Ensure canvas is properly sized and context is cached
   if (canvas.width === 0 || canvas.height === 0) {
     updateSkeletonCanvasSize()
     if (!skeletonCtx || canvas.width === 0 || canvas.height === 0) {
@@ -1491,54 +1622,134 @@ function drawSkeleton(landmarks: any[]) {
   }
 
   const ctx = skeletonCtx
+
+  // Apply smoothing to landmarks (or use linear tracking if disabled)
+  // On session route with linear tracking, skip smoothing to prevent flickering
   const shouldSmooth = enableSmoothing.value && !isSessionRoute.value
   const processedLandmarks = shouldSmooth ? smoothLandmarks(landmarks) : landmarks
   if (shouldSmooth) {
     smoothedPoseData.value = processedLandmarks
   } else {
+    // For linear tracking, just store the latest
     smoothedPoseData.value = processedLandmarks.map(lm => ({ ...lm }))
   }
 
+  // Transform landmarks to canvas coordinates
+  const transformStartTime = performance.now()
   const transformedLandmarks = transformLandmarks(processedLandmarks)
+  const transformTime = performance.now() - transformStartTime
 
   if (transformedLandmarks.length === 0) {
     return
   }
 
+  // Clear canvas
+  const clearStartTime = performance.now()
   ctx.save()
   ctx.clearRect(0, 0, canvas.width, canvas.height)
+  
+  // Optimize canvas rendering for smooth animation
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
+  
+  const clearTime = performance.now() - clearStartTime
 
+  // Draw pose connections using custom connections to ensure arms connect correctly
+  const drawConnectorsStartTime = performance.now()
   drawConnectors(ctx, transformedLandmarks, CUSTOM_POSE_CONNECTIONS, {
     color: '#00FF00',
     lineWidth: 4,
   })
+  const drawConnectorsTime = performance.now() - drawConnectorsStartTime
 
+  // Draw pose landmarks using MediaPipe utilities
+  const drawLandmarksStartTime = performance.now()
   drawLandmarks(ctx, transformedLandmarks, {
     color: '#FF0000',
     lineWidth: 2,
     radius: 5,
   })
+  const drawLandmarksTime = performance.now() - drawLandmarksStartTime
 
   ctx.restore()
+
+  // Track drawing performance
+  if (DEBUG_SKELETON) {
+    const totalDrawTime = performance.now() - drawStartTime
+    drawCount++
+    const timeSinceLastDraw = lastDrawTime > 0 ? drawStartTime - lastDrawTime : 0
+    lastDrawTime = drawStartTime
+    drawTimes.push(totalDrawTime)
+
+    // Keep only last 60 timings
+    if (drawTimes.length > 60) {
+      drawTimes.shift()
+    }
+
+    // Log stats every 60 draws (about 1 second at 60fps)
+    if (drawCount % 60 === 0) {
+      const avgDrawTime = drawTimes.reduce((a, b) => a + b, 0) / drawTimes.length
+      const maxDrawTime = Math.max(...drawTimes)
+      const avgInterval = timeSinceLastDraw > 0 ? timeSinceLastDraw : 0
+      const drawFPS = avgInterval > 0 ? (1000 / avgInterval).toFixed(1) : 'N/A'
+
+      console.log('[Skeleton Debug] Drawing Performance:', {
+        drawCount,
+        avgDrawTime: `${avgDrawTime.toFixed(2)}ms`,
+        maxDrawTime: `${maxDrawTime.toFixed(2)}ms`,
+        transformTime: `${transformTime.toFixed(2)}ms`,
+        clearTime: `${clearTime.toFixed(2)}ms`,
+        drawConnectorsTime: `${drawConnectorsTime.toFixed(2)}ms`,
+        drawLandmarksTime: `${drawLandmarksTime.toFixed(2)}ms`,
+        estimatedDrawFPS: drawFPS,
+        landmarksCount: landmarks.length,
+      })
+    }
+  }
 }
 
 function skeletonAnimationLoop() {
   if (!isSkeletonLoopRunning) return
 
+  const loopStartTime = performance.now()
+
+  // Always continue the loop, even if no data
+  // Get interpolated pose data from buffer for smooth animation
   const interpolatedPose = getInterpolatedPose()
 
   if (interpolatedPose && interpolatedPose.length > 0) {
     drawSkeleton(interpolatedPose)
   } else {
+    // Keep drawing the last known pose if available, even if stale
     if (lastPoseData.value && lastPoseData.value.length > 0) {
       drawSkeleton(lastPoseData.value)
+    } else if (DEBUG_SKELETON && drawCount % 300 === 0) {
+      console.warn('[Skeleton Debug] Animation loop running but no pose data available')
     }
   }
 
+  const loopTime = performance.now() - loopStartTime
+
+  // Track loop performance
+  if (DEBUG_SKELETON && drawCount % 300 === 0) {
+    const now = performance.now()
+    const lastFrameTime = poseBuffer.length > 0
+      ? poseBuffer[poseBuffer.length - 1]?.timestamp || 0
+      : 0
+    const timeSinceLastFrame = now - lastFrameTime
+
+    console.log('[Skeleton Debug] Animation loop:', {
+      loopTime: `${loopTime.toFixed(2)}ms`,
+      hasPoseData: !!interpolatedPose,
+      bufferSize: poseBuffer.length,
+      timeSinceLastFrame: `${timeSinceLastFrame.toFixed(0)}ms`,
+      isRunning: isSkeletonLoopRunning,
+    })
+  }
+
+  // Always continue the loop at 60fps using requestAnimationFrame
   skeletonAnimationFrame = requestAnimationFrame(() => {
     skeletonAnimationLoop()
   })
@@ -1602,11 +1813,9 @@ function skeletonAnimationLoop() {
   }
   .route-edit-container.box.session-route {
     padding-bottom: 0 !important;
-    padding-top: 0 !important;
   }
   .route-edit-container.box.session-route .canvas-container {
     max-height: calc(100vh - 180px) !important;
-    margin-top: 0 !important;
   }
 
   :deep(canvas) {
@@ -1626,18 +1835,6 @@ function skeletonAnimationLoop() {
     align-items: flex-start !important;
     padding-top: 80px !important;
   }
-  .box.session-route {
-    align-items: flex-start !important;
-    padding-top: 0 !important;
-    padding: 0 !important;
-  }
-  .box.session-route .canvas-container {
-    margin-top: 0 !important;
-    margin: 0 !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    max-height: calc(100vh - 180px) !important;
-  }
 }
 
 /* Desktop styles */
@@ -1656,16 +1853,8 @@ function skeletonAnimationLoop() {
 @media (max-width: 1024px) {
   .touch-none {
     -webkit-tap-highlight-color: transparent;
-    touch-action: pan-x pan-y;
+    touch-action: none;
     user-select: none;
-  }
-  
-  .canvas-container.pan-mode {
-    touch-action: pan-x pan-y;
-  }
-  
-  .canvas-container.pan-mode.pan-dragging {
-    touch-action: pan-x pan-y;
   }
 }
 
