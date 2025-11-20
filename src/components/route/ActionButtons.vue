@@ -61,44 +61,6 @@
     </button>
   </div>
 
-  <!-- Session Action Bar for Tablet and Desktop -->
-  <div v-if="!isMobile && isSessionRoute" class="action-bar">
-    <Button
-      :icon="'pi pi-refresh'"
-      class="action-bar-button"
-      @click="$emit('restart')"
-      v-tooltip.left="'Restart'"
-      rounded
-    />
-    <Button
-      :icon="'pi pi-replay'"
-      class="action-bar-button"
-      @click="$emit('relay')"
-      v-tooltip.left="'Relay'"
-      rounded
-    />
-    <Button
-      :icon="'pi pi-pause'"
-      class="action-bar-button"
-      @click="$emit('pause')"
-      v-tooltip.left="'Pause'"
-      rounded
-    />
-  </div>
-
-  <!-- Mobile Session Action Bar -->
-  <div v-if="isMobile && isSessionRoute" class="mobile-action-bar">
-    <button
-      v-for="item in sessionMobileActionItems"
-      :key="item.label"
-      class="mobile-action-btn"
-      @click="item.command()"
-      :title="item.tooltip"
-    >
-      <i :class="item.icon"></i>
-    </button>
-  </div>
-
   <!-- Recording Button for Session (Desktop/Tablet) -->
   <div v-if="!isMobile && isSessionRoute" class="recording-button-container">
     <button
@@ -110,6 +72,21 @@
       <span v-else class="recording-button-stop"></span>
     </button>
     <div v-if="isRecording" class="recording-timer-display">{{ recordingTime }}</div>
+    <Button
+      v-if="isRecording"
+      :icon="isPaused ? 'pi pi-play' : 'pi pi-pause'"
+      class="pause-button"
+      @click="$emit('pause')"
+      v-tooltip.left="isPaused ? 'Resume' : 'Pause'"
+      rounded
+    />
+    <Button
+      :icon="'pi pi-replay'"
+      class="replay-button"
+      @click="$emit('relay')"
+      v-tooltip.left="'Replay'"
+      rounded
+    />
   </div>
 
   <!-- Recording Button for Session (Mobile) -->
@@ -123,6 +100,21 @@
       <span v-else class="recording-button-stop-mobile"></span>
     </button>
     <div v-if="isRecording" class="recording-timer-display-mobile">{{ recordingTime }}</div>
+    <button
+      v-if="isRecording"
+      class="pause-button-mobile"
+      @click="$emit('pause')"
+      :title="isPaused ? 'Resume' : 'Pause'"
+    >
+      <i :class="isPaused ? 'pi pi-play' : 'pi pi-pause'"></i>
+    </button>
+    <button
+      class="replay-button-mobile"
+      @click="$emit('relay')"
+      title="Replay"
+    >
+      <i class="pi pi-replay"></i>
+    </button>
   </div>
 </template>
 
@@ -136,6 +128,7 @@ const props = defineProps<{
   startMode: boolean
   endMode: boolean
   isRecording?: boolean
+  isPaused?: boolean
   recordingTime?: string
 }>()
 
@@ -197,26 +190,6 @@ const mobileActionItems = computed(() => [
   },
 ])
 
-const sessionMobileActionItems = computed(() => [
-  {
-    label: 'Restart',
-    icon: 'pi pi-refresh',
-    command: () => emit('restart'),
-    tooltip: 'Restart',
-  },
-  {
-    label: 'Relay',
-    icon: 'pi pi-replay',
-    command: () => emit('relay'),
-    tooltip: 'Relay',
-  },
-  {
-    label: 'Pause',
-    icon: 'pi pi-pause',
-    command: () => emit('pause'),
-    tooltip: 'Pause',
-  },
-])
 </script>
 
 <style scoped>
@@ -409,9 +382,9 @@ const sessionMobileActionItems = computed(() => [
 .recording-button-container {
   position: absolute;
   left: 20px;
-  bottom: 110px; /* Above bottom menu (90px height + 20px padding) */
+  bottom: 100px; /* Above bottom menu */
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   align-items: center;
   gap: 0.75rem;
   z-index: 1001; /* Above bottom menu (z-index: 1000) */
@@ -479,6 +452,64 @@ const sessionMobileActionItems = computed(() => [
   white-space: nowrap;
 }
 
+.pause-button,
+.pause-button.p-button {
+  width: 3.5rem !important;
+  height: 3.5rem !important;
+  font-size: 1rem !important;
+  border-radius: 50% !important;
+  background: white !important;
+  color: black !important;
+  border: none !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+  transition: all 0.2s !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pause-button:active,
+.pause-button.p-button:active {
+  transform: scale(0.95);
+  background: #d0d0d0 !important;
+}
+
+.pause-button :deep(.p-button-icon),
+.pause-button :deep(.pi),
+.pause-button :deep(i) {
+  font-size: inherit !important;
+  color: inherit !important;
+}
+
+.replay-button,
+.replay-button.p-button {
+  width: 3.5rem !important;
+  height: 3.5rem !important;
+  font-size: 1rem !important;
+  border-radius: 50% !important;
+  background: white !important;
+  color: black !important;
+  border: none !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+  transition: all 0.2s !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.replay-button:active,
+.replay-button.p-button:active {
+  transform: scale(0.95);
+  background: #d0d0d0 !important;
+}
+
+.replay-button :deep(.p-button-icon),
+.replay-button :deep(.pi),
+.replay-button :deep(i) {
+  font-size: inherit !important;
+  color: inherit !important;
+}
+
 @keyframes recordingPulse {
   0%, 100% {
     box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4);
@@ -491,7 +522,7 @@ const sessionMobileActionItems = computed(() => [
 /* Recording Button - Mobile */
 .recording-button-container-mobile {
   position: fixed;
-  bottom: 100px; /* Above bottom menu (80px height + 20px padding) */
+  bottom: 90px; /* Above bottom menu */
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -558,11 +589,68 @@ const sessionMobileActionItems = computed(() => [
   white-space: nowrap;
 }
 
+.replay-button-mobile {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  background: white;
+  border: 2.5px solid rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  transition: box-shadow 0.2s ease, opacity 0.2s ease;
+  transform-origin: center;
+  will-change: box-shadow;
+  flex-shrink: 0;
+}
+
+.replay-button-mobile:active {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  opacity: 0.9;
+  transform: scale(0.95);
+}
+
+.replay-button-mobile i {
+  font-size: 1.25rem;
+  color: #333;
+}
+
+.pause-button-mobile {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  background: white;
+  border: 2.5px solid rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  transition: box-shadow 0.2s ease, opacity 0.2s ease;
+  transform-origin: center;
+  will-change: box-shadow;
+  flex-shrink: 0;
+}
+
+.pause-button-mobile:active {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  opacity: 0.9;
+  transform: scale(0.95);
+}
+
+.pause-button-mobile i {
+  font-size: 1.25rem;
+  color: #333;
+}
+
 @media (min-width: 641px) and (max-width: 1024px) {
   .recording-button-container {
     left: 50%;
-    bottom: 115px; /* Above bottom menu (85px height + 30px padding) */
+    bottom: 100px; /* Above bottom menu */
     transform: translateX(-50%);
+    flex-direction: row;
   }
 }
 </style>
