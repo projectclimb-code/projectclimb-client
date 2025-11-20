@@ -31,7 +31,7 @@ export default defineConfig({
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(packageJson.version),
   },
   server: {
-    https: true, // HTTPS enabled via vite-plugin-mkcert (creates trusted certificates)
+    https: false, // HTTPS enabled via vite-plugin-mkcert (creates trusted certificates)
     host: true, // Allow access from network (iPhone can access via https://192.168.0.37:5173)
   },
 })
