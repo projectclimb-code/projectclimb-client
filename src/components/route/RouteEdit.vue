@@ -612,7 +612,7 @@ function isWideScreen(width?: number, height?: number) {
 let handleResize: (() => void) | null = null
 
 async function restartSession() {
-  const routeId = route.query.id ? Number(route.query.id) : 80
+  const routeId = route.query.id ? Number(route.query.id) : 99
 
 
   if (isSessionRoute.value) {
