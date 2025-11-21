@@ -42,7 +42,7 @@
       @start="activateStartMode"
       @end="activateEndMode"
       @restart="handleRestart"
-      @relay="restartSession"
+      @relay="kill"
       @pause="handlePause"
       @toggle-recording="toggleRecording"
     />
@@ -647,6 +647,44 @@ async function restartSession() {
     }
   }
 }
+
+async function kill() {
+  const routeId = route.query.id ? Number(route.query.id) : 99
+
+
+  if (isSessionRoute.value) {
+    const url2 = 'http://192.168.88.2:8012/tasks/kill-all/'
+    const options2 = {
+      method: 'GET',
+      headers: { 'content-type': 'application/json' },
+    }
+
+    try {
+      const response = await fetch(url2, options2)
+      const data = await response.json()
+      console.log(data)
+    } catch (error) {
+      console.error(error)
+    }
+
+
+    // const url = 'http://192.168.88.2:8012/tasks/start-default/'
+    // const options = {
+    //   method: 'POST',
+    //   headers: { 'content-type': 'application/json' },
+    //   body: `{"route_id":${routeId}, "input_websocket_url":"ws://10.210.117.4:8011/ws/pose/", "output_websocket_url":"ws://10.210.117.4:8011/ws/holds/"}`,
+    // }
+
+    // try {
+    //   const response = await fetch(url, options)
+    //   const data = await response.json()
+    //   console.log(data)
+    // } catch (error) {
+    //   console.error(error)
+    // }
+  }
+}
+
 
 onMounted(async () => {
   await nextTick()
