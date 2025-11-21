@@ -42,7 +42,7 @@
       @start="activateStartMode"
       @end="activateEndMode"
       @restart="handleRestart"
-      @relay="handleRelay"
+      @relay="restartSession"
       @pause="handlePause"
       @toggle-recording="toggleRecording"
     />
@@ -127,7 +127,6 @@ import CreateBoulderDialog from './CreateBoulderDialog.vue'
 import { POSE_CONNECTIONS } from '@mediapipe/pose'
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils'
 import Konva from 'konva'
-import { startSession } from '@/services/routes.service'
 
 const CUSTOM_POSE_CONNECTIONS: [number, number][] = [
   ...POSE_CONNECTIONS.filter((conn: [number, number]) => {
@@ -462,10 +461,10 @@ function handleRestart() {
   websocketService.sendSessionAction('restart')
 }
 
-function handleRelay() {
-  console.log('Relaying session...')
-  restartSession()
-}
+// function handleRelay() {
+//   console.log('Relaying session...')
+//   restartSession()
+// }
 
 function handlePause() {
   if (isRecording.value && !isPaused.value) {
@@ -612,10 +611,40 @@ function isWideScreen(width?: number, height?: number) {
 
 let handleResize: (() => void) | null = null
 
-function restartSession() {
-  const routeId = route.query.id ? Number(route.query.id) : null
+async function restartSession() {
+  const routeId = route.query.id ? Number(route.query.id) : 80
+
+
   if (isSessionRoute.value) {
-    startSession(routeId || 0)
+    const url2 = 'http://192.168.88.2:8012/tasks/kill-all/'
+    const options2 = {
+      method: 'GET',
+      headers: { 'content-type': 'application/json' },
+    }
+
+    try {
+      const response = await fetch(url2, options2)
+      const data = await response.json()
+      console.log(data)
+    } catch (error) {
+      console.error(error)
+    }
+
+
+    const url = 'http://192.168.88.2:8012/tasks/start-default/'
+    const options = {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: `{"route_id":${routeId}, "input_websocket_url":"ws://10.210.117.4:8011/ws/pose/", "output_websocket_url":"ws://10.210.117.4:8011/ws/holds/"}`,
+    }
+
+    try {
+      const response = await fetch(url, options)
+      const data = await response.json()
+      console.log(data)
+    } catch (error) {
+      console.error(error)
+    }
   }
 }
 
