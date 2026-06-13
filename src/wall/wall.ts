@@ -26,8 +26,8 @@ export async function loadWallSvg(
 
     // Extract hold ID from SVG (e.g., "hold_48" -> "48") or use index as fallback
     const holdIdAttr = p.getAttribute('id') || ''
-    const holdIdMatch = holdIdAttr.match(/hold_(\d+)/)
-    const pathId = holdIdMatch ? holdIdMatch[1] : `${i}`
+    const holdIdMatch = holdIdAttr.match(/(\d+)/)
+    const pathId = p.getAttribute('id') || ''
     const isStart = selectedStarts.includes(pathId || '')
     const isEnd = selectedEnd === pathId
 

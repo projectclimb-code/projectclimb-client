@@ -230,6 +230,7 @@ let observer: ResizeObserver | null = null
 let flipToastTimeout: ReturnType<typeof setTimeout> | null = null
 
 async function handleSave() {
+  console.log(currentRoute.value);
   disablePanMode()
 
   if (!currentRoute.value || !currentRoute.value?.id) {

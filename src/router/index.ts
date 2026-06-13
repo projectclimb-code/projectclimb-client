@@ -32,6 +32,10 @@ const router = createRouter({
       name: 'Session',
       component: () => import('../views/SessionView.vue'),
     },
+    {
+      path: '/:pathMatch(.*)*',
+      redirect: '/',
+    },
   ],
 })
 
