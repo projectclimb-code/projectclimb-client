@@ -476,7 +476,7 @@ watch(() => props.route.data?.problem?.holds, () => {
                   rgba(50, 50, 93, 0.25) 0px 13px 27px -5px,
                   rgba(0, 0, 0, 0.3) 0px 8px 16px -8px;
               "
-              @click.stop="editRoute('/session')"
+              @click.stop="preview()"
             >
               <div class="text-primary font-light flex items-center gap-1 text-xs">
                 <img
